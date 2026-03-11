@@ -10,7 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.APP_PASSWORD || 'rankings2026';
 const AUTH_TOKEN = Buffer.from(PASSWORD).toString('base64');
-const DATA_FILE = path.join(__dirname, 'data.json');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const DATA_FILE = path.join(DATA_DIR, 'data.json');
 
 app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
