@@ -53,14 +53,19 @@ app.get('/api/check-auth', (req, res) => {
 
 app.get('/api/data', requireAuth, (req, res) => {
   try {
+    console.log(`[GET /api/data] Checking file: ${DATA_FILE}, exists: ${fs.existsSync(DATA_FILE)}`);
     if (fs.existsSync(DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      console.log(`[GET /api/data] File size: ${raw.length} bytes`);
+      const data = JSON.parse(raw);
+      console.log(`[GET /api/data] Operators keys: ${Object.keys(data.operators || {}).length}`);
       res.json(data);
     } else {
+      console.log('[GET /api/data] No data file found, returning empty');
       res.json({ operators: {}, positionData: {}, scrapeAlerts: {} });
     }
   } catch (err) {
-    console.error('Error reading data:', err);
+    console.error('[GET /api/data] Error:', err);
     res.json({ operators: {}, positionData: {}, scrapeAlerts: {} });
   }
 });
@@ -68,16 +73,20 @@ app.get('/api/data', requireAuth, (req, res) => {
 app.post('/api/data', requireAuth, (req, res) => {
   try {
     const { operators, positionData, scrapeAlerts } = req.body;
+    console.log(`[POST /api/data] Received - operators: ${Object.keys(operators || {}).length}, positionData: ${Object.keys(positionData || {}).length}`);
     const data = {
       operators: operators || {},
       positionData: positionData || {},
       scrapeAlerts: scrapeAlerts || {},
       lastModified: new Date().toISOString()
     };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data), 'utf8');
+    const json = JSON.stringify(data);
+    console.log(`[POST /api/data] Writing ${json.length} bytes to ${DATA_FILE}`);
+    fs.writeFileSync(DATA_FILE, json, 'utf8');
+    console.log(`[POST /api/data] Write successful, file exists: ${fs.existsSync(DATA_FILE)}`);
     res.json({ success: true });
   } catch (err) {
-    console.error('Error writing data:', err);
+    console.error('[POST /api/data] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
