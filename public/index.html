@@ -262,11 +262,32 @@
 
 <script>
 // ==================== AUTH ====================
+async function tryAutoLaunch() {
+  try {
+    const resp = await fetch('/api/data');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.operators && Object.keys(data.operators).length) {
+        operators = data.operators;
+        if (data.positionData && Object.keys(data.positionData).length) positionData = data.positionData;
+        if (data.scrapeAlerts && Object.keys(data.scrapeAlerts).length) scrapeAlerts = data.scrapeAlerts;
+        processData();
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('upload-screen').style.display = 'none';
+        showMarketScreen();
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
 async function checkAuth() {
   try {
     const resp = await fetch('/api/check-auth');
     if (resp.ok) {
       document.getElementById('login-screen').style.display = 'none';
+      if (await tryAutoLaunch()) return true;
       document.getElementById('upload-screen').style.display = 'flex';
       return true;
     }
@@ -288,6 +309,7 @@ async function doLogin() {
     });
     if (resp.ok) {
       document.getElementById('login-screen').style.display = 'none';
+      if (await tryAutoLaunch()) return;
       document.getElementById('upload-screen').style.display = 'flex';
     } else {
       errEl.textContent = 'Mot de passe incorrect';
