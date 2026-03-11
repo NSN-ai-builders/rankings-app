@@ -10,7 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.APP_PASSWORD || 'rankings2026';
 const AUTH_TOKEN = Buffer.from(PASSWORD).toString('base64');
-const DATA_DIR = process.env.DATA_DIR || __dirname;
+// Auto-detect Railway volume at /data, fallback to local dir
+let DATA_DIR = process.env.DATA_DIR || __dirname;
+if (fs.existsSync('/data') && fs.statSync('/data').isDirectory()) {
+  DATA_DIR = '/data';
+}
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 
 app.use(cookieParser());
@@ -222,4 +226,5 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.listen(PORT, () => {
   console.log(`=== Rankings Server running on http://localhost:${PORT} ===`);
   console.log(`=== Password: ${PASSWORD} ===`);
+  console.log(`=== Data file: ${DATA_FILE} ===`);
 });
