@@ -574,25 +574,34 @@ function processData() {
 // ==================== PERSISTENCE (SERVER API) ====================
 async function loadPersisted() {
   try {
-    const resp = await fetch('/api/data');
+    console.log('[LOAD] Fetching data from server...');
+    const resp = await fetch('/api/data', { credentials: 'same-origin' });
+    console.log('[LOAD] Response:', resp.status, resp.statusText);
     if (resp.ok) {
       const data = await resp.json();
+      console.log('[LOAD] Operators:', Object.keys(data.operators || {}).length, '| PositionData:', Object.keys(data.positionData || {}).length);
       if (data.operators && Object.keys(data.operators).length) operators = data.operators;
       if (data.positionData && Object.keys(data.positionData).length) positionData = data.positionData;
       if (data.scrapeAlerts && Object.keys(data.scrapeAlerts).length) scrapeAlerts = data.scrapeAlerts;
     }
-  } catch(e) { console.warn('Failed to load persisted data from server', e); }
+  } catch(e) { console.error('[LOAD] Failed:', e); }
 }
 
 let _saveTimeout = null;
 function saveAll() {
   clearTimeout(_saveTimeout);
   _saveTimeout = setTimeout(() => {
+    const payload = JSON.stringify({ operators, positionData, scrapeAlerts });
+    console.log('[SAVE] Sending', (payload.length / 1024).toFixed(1), 'KB to server...');
     fetch('/api/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operators, positionData, scrapeAlerts })
-    }).catch(e => console.warn('Failed to save to server', e));
+      credentials: 'same-origin',
+      body: payload
+    }).then(r => {
+      console.log('[SAVE] Response:', r.status, r.statusText);
+      if (!r.ok) r.text().then(t => console.error('[SAVE] Error body:', t));
+    }).catch(e => console.error('[SAVE] Network error:', e));
   }, 500);
 }
 function saveOps() { saveAll(); }
