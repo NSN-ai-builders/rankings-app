@@ -264,21 +264,24 @@
 // ==================== AUTH ====================
 async function tryAutoLaunch() {
   try {
-    const resp = await fetch('/api/data');
+    const resp = await fetch('/api/data', { credentials: 'same-origin' });
     if (resp.ok) {
       const data = await resp.json();
-      if (data.operators && Object.keys(data.operators).length) {
-        operators = data.operators;
+      if (data.rawPagesCSV && data.rawPositionsCSV) {
+        rawPagesCSV = data.rawPagesCSV;
+        rawPositionsCSV = data.rawPositionsCSV;
+        if (data.operators && Object.keys(data.operators).length) operators = data.operators;
         if (data.positionData && Object.keys(data.positionData).length) positionData = data.positionData;
         if (data.scrapeAlerts && Object.keys(data.scrapeAlerts).length) scrapeAlerts = data.scrapeAlerts;
         processData();
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('upload-screen').style.display = 'none';
         showMarketScreen();
+        console.log('[AUTO-LAUNCH] Success - loaded from server');
         return true;
       }
     }
-  } catch(e) {}
+  } catch(e) { console.error('[AUTO-LAUNCH] Failed:', e); }
   return false;
 }
 
@@ -591,7 +594,7 @@ let _saveTimeout = null;
 function saveAll() {
   clearTimeout(_saveTimeout);
   _saveTimeout = setTimeout(() => {
-    const payload = JSON.stringify({ operators, positionData, scrapeAlerts });
+    const payload = JSON.stringify({ operators, positionData, scrapeAlerts, rawPagesCSV, rawPositionsCSV });
     console.log('[SAVE] Sending', (payload.length / 1024).toFixed(1), 'KB to server...');
     fetch('/api/data', {
       method: 'POST',

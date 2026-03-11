@@ -72,14 +72,16 @@ app.get('/api/data', requireAuth, (req, res) => {
 
 app.post('/api/data', requireAuth, (req, res) => {
   try {
-    const { operators, positionData, scrapeAlerts } = req.body;
-    console.log(`[POST /api/data] Received - operators: ${Object.keys(operators || {}).length}, positionData: ${Object.keys(positionData || {}).length}`);
+    const { operators, positionData, scrapeAlerts, rawPagesCSV, rawPositionsCSV } = req.body;
+    console.log(`[POST /api/data] Received - operators: ${Object.keys(operators || {}).length}, positionData: ${Object.keys(positionData || {}).length}, hasCSV: ${!!(rawPagesCSV && rawPositionsCSV)}`);
     const data = {
       operators: operators || {},
       positionData: positionData || {},
       scrapeAlerts: scrapeAlerts || {},
       lastModified: new Date().toISOString()
     };
+    if (rawPagesCSV) data.rawPagesCSV = rawPagesCSV;
+    if (rawPositionsCSV) data.rawPositionsCSV = rawPositionsCSV;
     const json = JSON.stringify(data);
     console.log(`[POST /api/data] Writing ${json.length} bytes to ${DATA_FILE}`);
     fs.writeFileSync(DATA_FILE, json, 'utf8');
