@@ -126,6 +126,8 @@ var siteConfig = {};   // { siteName: { logo: '', color: '#hex', domain: '' } }
 var operatorConfig = {}; // { opName: { logo: '', color: '#hex' } }
 var operatorDB = {}; // { market: { operatorName: { baseName, displayName, am, url, status, license, visits } } }
 var operatorVariants = {}; // { normalizedName: canonicalName }
+var gscTraffic = {}; // { market: { url: { clicks, lastUpdated } } }
+var scanLog = []; // scan history
 
 // ==================== COUNTRY FLAGS ====================
 const COUNTRY_FLAGS = {
@@ -358,7 +360,7 @@ async function launch() {
 
 // ==================== EXPORT / IMPORT ====================
 function exportData() {
-  var blob = new Blob([JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+  var blob = new Blob([JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, operatorDB: operatorDB, operatorVariants: operatorVariants, gscTraffic: gscTraffic, scanLog: scanLog, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'rankings-data-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -375,6 +377,10 @@ function importData(e) {
       if (data.operators) operators = Object.assign({}, operators, data.operators);
       if (data.positionData) positionData = Object.assign({}, positionData, data.positionData);
       if (data.scrapeAlerts) scrapeAlerts = Object.assign({}, scrapeAlerts, data.scrapeAlerts);
+      if (data.operatorDB) operatorDB = Object.assign({}, operatorDB, data.operatorDB);
+      if (data.operatorVariants) operatorVariants = Object.assign({}, operatorVariants, data.operatorVariants);
+      if (data.gscTraffic) gscTraffic = Object.assign({}, gscTraffic, data.gscTraffic);
+      if (data.scanLog) scanLog = data.scanLog;
       saveAll();
       renderCurrentView();
       showToast('Import successful!', 'success');
