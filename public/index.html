@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Generic Pages Rankings</title>
+<title>iGaming Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -11,7 +11,7 @@
 
 <!-- Login Screen -->
 <div id="login-screen">
-  <h1>📊 Generic Pages Rankings</h1>
+  <h1>📊 iGaming Manager</h1>
   <p>Secured access</p>
   <div class="login-form">
     <input type="password" id="login-password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -22,7 +22,7 @@
 
 <!-- Upload Screen -->
 <div id="upload-screen">
-  <h1>📊 Generic Pages Rankings</h1>
+  <h1>📊 iGaming Manager</h1>
   <p>Upload the two CSV files exported from Notion to start analyzing all markets.</p>
   <div class="upload-zones">
     <div class="upload-zone" id="zone-pages" onclick="document.getElementById('file-pages').click()">
@@ -41,43 +41,122 @@
   <button id="btn-launch" onclick="launch()">Load data</button>
 </div>
 
-<!-- Market Selector Screen -->
-<div id="market-screen">
-  <h1>Generic Pages Rankings</h1>
-  <p class="subtitle">Select a market to access the dashboard</p>
-  <div style="display:flex;gap:12px;justify-content:center;margin-bottom:16px">
-    <button onclick="showAMScreen()" style="padding:8px 20px;border-radius:3px;border:1px solid #d0d0d0;background:#fff;color:#1a1a1a;font-size:14px;cursor:pointer">View by Account Manager</button>
-    <button onclick="showOperatorsScreen()" style="padding:8px 20px;border-radius:3px;border:1px solid #d0d0d0;background:#fff;color:#1a1a1a;font-size:14px;cursor:pointer">View Operators DB</button>
+<!-- Home Screen -->
+<div id="home-screen">
+  <h1>iGaming Manager</h1>
+  <p class="subtitle">Select a module</p>
+  <div class="home-grid" id="home-grid">
+    <div class="home-card" onclick="showRankingsScreen()">
+      <div class="home-card-icon">📊</div>
+      <div class="home-card-title">Rankings</div>
+      <div class="home-card-desc">Generic pages rankings by market</div>
+    </div>
+    <div class="home-card" onclick="showAMScreen()">
+      <div class="home-card-icon">👤</div>
+      <div class="home-card-title">Account Managers</div>
+      <div class="home-card-desc">Deals, proposals & AM performance</div>
+    </div>
+    <div class="home-card" onclick="showOperatorsScreen()">
+      <div class="home-card-icon">🏢</div>
+      <div class="home-card-title">Operators</div>
+      <div class="home-card-desc">Operator database across markets</div>
+    </div>
+    <div class="home-card" onclick="showSitesDBScreen()">
+      <div class="home-card-icon">🌐</div>
+      <div class="home-card-title">Sites</div>
+      <div class="home-card-desc">Sites & pages management</div>
+    </div>
+    <div class="home-card" onclick="showGuidelinesScreen()">
+      <div class="home-card-icon">📖</div>
+      <div class="home-card-title">Guidelines</div>
+      <div class="home-card-desc">How to use this tool</div>
+    </div>
   </div>
-  <div class="market-grid" id="market-grid"></div>
+</div>
+
+<!-- Rankings / Market Selector Screen -->
+<div id="market-screen" style="display:none">
+  <div class="topbar">
+    <div class="logo" onclick="showHomeScreen()" style="cursor:pointer">&larr; Home</div>
+    <div style="font-size:16px;font-weight:700;margin-left:8px;color:var(--topbar-text)">Rankings</div>
+    <div class="topbar-actions" style="margin-left:auto">
+      <button onclick="exportData()">Export JSON</button>
+      <button onclick="document.getElementById('import-file-home').click()">Import JSON</button>
+      <input type="file" id="import-file-home" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </div>
+  <div class="content">
+    <div class="market-grid" id="market-grid"></div>
+  </div>
 </div>
 
 <!-- AM Screen (cross-market) -->
 <div id="am-screen" style="display:none">
   <div class="topbar">
-    <div class="logo" onclick="hideAMScreen()" style="cursor:pointer">&larr; Markets</div>
-    <div style="font-size:16px;font-weight:700;margin-left:8px">Account Managers</div>
-    <div class="month-sel" style="margin-left:auto">
-      <select id="am-month-select" onchange="onAMMonthChange()"></select>
+    <div class="logo" onclick="hideAMScreen()" style="cursor:pointer">&larr; Home</div>
+    <div class="tabs" id="am-tabs">
+      <button class="active" data-view="am-main" onclick="switchAMTab('am-main')">Account Managers</button>
+      <button data-view="proposals" onclick="switchAMTab('proposals')">Commercial Proposals</button>
+    </div>
+    <div id="am-topbar-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <div class="month-sel">
+        <select id="am-month-select" onchange="onAMMonthChange()"></select>
+      </div>
     </div>
   </div>
   <div class="content" id="am-content"></div>
+  <div class="content" id="am-proposals-content" style="display:none"></div>
 </div>
 
 <!-- Operators DB Screen (cross-market) -->
 <div id="operators-db-screen" style="display:none">
   <div class="topbar">
-    <div class="logo" onclick="hideOperatorsScreen()" style="cursor:pointer">&larr; Markets</div>
-    <div style="font-size:16px;font-weight:700;margin-left:8px">Operators Database</div>
+    <div class="logo" onclick="hideOperatorsScreen()" style="cursor:pointer">&larr; Home</div>
+    <div style="font-size:16px;font-weight:700;margin-left:8px;color:var(--topbar-text)">Operators</div>
     <div style="margin-left:auto"></div>
   </div>
   <div class="content" id="operators-db-content"></div>
 </div>
 
+<!-- Proposals Screen (cross-market) -->
+<div id="proposals-screen" style="display:none">
+  <div class="topbar">
+    <div class="logo" onclick="hideProposalsScreen()" style="cursor:pointer">&larr; Markets</div>
+    <div style="font-size:16px;font-weight:700;margin-left:8px">Commercial Proposals</div>
+    <div style="margin-left:auto">
+      <button onclick="proposalNavigate('create')" style="padding:6px 14px;border-radius:var(--radius);border:none;background:var(--gradient-primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(45,127,249,.2)">+ New Proposal</button>
+    </div>
+  </div>
+  <div class="content" id="proposals-content"></div>
+</div>
+
+<!-- Sites DB Screen (cross-market) -->
+<div id="sites-db-screen" style="display:none">
+  <div class="topbar">
+    <div class="logo" onclick="hideSitesDBScreen()" style="cursor:pointer">&larr; Home</div>
+    <div style="font-size:16px;font-weight:700;margin-left:8px;color:var(--topbar-text)">Sites</div>
+    <div style="margin-left:auto"></div>
+  </div>
+  <div class="content" id="sites-db-content"></div>
+</div>
+
+<!-- Guidelines Screen -->
+<div id="guidelines-screen" style="display:none">
+  <div class="topbar">
+    <div class="logo" onclick="hideGuidelinesScreen()" style="cursor:pointer">&larr; Home</div>
+    <div style="font-size:16px;font-weight:700;margin-left:8px;color:var(--topbar-text)">Guidelines</div>
+    <div style="margin-left:auto"></div>
+  </div>
+  <div id="guidelines-content"></div>
+</div>
+
 <!-- App Screen -->
 <div id="app-screen">
   <div class="topbar">
-    <div class="logo" onclick="showMarketScreen()"><span id="market-flag-top"></span> <span id="market-name-top"></span></div>
+    <div class="logo" onclick="showHomeScreen()" style="cursor:pointer">&larr; Home</div>
+    <div class="logo" onclick="showRankingsScreen()" style="cursor:pointer;opacity:.7;font-weight:500">Rankings</div>
+    <div style="color:var(--topbar-muted);font-size:13px;margin:0 2px">/</div>
+    <div style="font-size:14px;font-weight:700;color:var(--topbar-text);white-space:nowrap"><span id="market-flag-top"></span> <span id="market-name-top"></span></div>
     <div class="tabs" id="main-tabs"></div>
     <div class="month-sel">
       <select id="month-select" onchange="onMonthChange()"></select>
@@ -97,6 +176,9 @@
 <script src="js/data.js"></script>
 <script src="js/views.js"></script>
 <script src="js/detail.js"></script>
+<script src="js/proposals.js"></script>
+<script src="js/sites-db.js"></script>
 <script src="js/scrape.js"></script>
+<script src="js/guidelines.js"></script>
 </body>
 </html>

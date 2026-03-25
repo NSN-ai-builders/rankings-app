@@ -182,6 +182,8 @@ async function loadPersisted() {
       if (data.operatorDB) operatorDB = data.operatorDB;
       if (data.operatorVariants) operatorVariants = data.operatorVariants;
       if (data.gscTraffic) window.gscTraffic = data.gscTraffic;
+      if (data.proposals) { proposals = data.proposals; console.log('[LOAD] Proposals:', Object.keys(proposals).length); }
+      if (data.sitesDB) sitesDB = data.sitesDB;
       // Restore CSV data and rebuild allMarkets
       if (data.rawPagesCSV && data.rawPositionsCSV) {
         rawPagesCSV = data.rawPagesCSV;
@@ -213,7 +215,7 @@ var _saveTimeout = null;
 function saveAll() {
   clearTimeout(_saveTimeout);
   _saveTimeout = setTimeout(function() {
-    var payload = JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, rawPagesCSV: rawPagesCSV, rawPositionsCSV: rawPositionsCSV, siteConfig: siteConfig, operatorConfig: operatorConfig, operatorDB: operatorDB, operatorVariants: operatorVariants });
+    var payload = JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, rawPagesCSV: rawPagesCSV, rawPositionsCSV: rawPositionsCSV, siteConfig: siteConfig, operatorConfig: operatorConfig, operatorDB: operatorDB, operatorVariants: operatorVariants, proposals: proposals, sitesDB: sitesDB });
     console.log('[SAVE] Sending', (payload.length / 1024).toFixed(1), 'KB to server...');
     fetch('/api/data', {
       method: 'POST',

@@ -17,8 +17,8 @@ function renderPageDetail(ct, pageUrl) {
     <button class="back-btn" onclick="goBack()">\u2190 Back</button>\
     <div class="page-header">\
       <div style="display:flex;align-items:center;gap:10px">\
-        ' + (getSiteLogo(pg.siteName) ? '<img src="' + getSiteLogo(pg.siteName) + '" width="28" height="28" style="border-radius:3px" onerror="this.style.display=\'none\'">' : '') + '\
-        <h2>' + esc(pg.article) + (hasAlerts(pageUrl) ? ' <span class="warn-icon">\u26A0\uFE0F</span>' : '') + '</h2>\
+        ' + (getSiteLogo(pg.siteName) ? '<img src="' + getSiteLogo(pg.siteName) + '" width="28" height="28" style="border-radius:3px;flex-shrink:0" onerror="this.style.display=\'none\'">' : '') + '\
+        <h2 style="margin:0;line-height:1.2">' + esc(pg.article) + (hasAlerts(pageUrl) ? ' <span class="warn-icon">\u26A0\uFE0F</span>' : '') + '</h2>\
         <button class="btn-sm" onclick="showPageSettings(\'' + esc(pageUrl) + '\')" style="margin-left:4px" title="Page settings">\u2699\uFE0F</button>\
       </div>\
       <a href="' + esc(pg.url) + '" target="_blank" class="url">' + esc(pg.url) + '</a>\
@@ -27,25 +27,35 @@ function renderPageDetail(ct, pageUrl) {
         ' + (function() { var t = (pg.topic || pg.tags || ''); if (!t) return ''; return t.split(',').map(function(x) { x = x.trim(); return x ? '<span class="badge badge-purple">' + esc(x) + '</span>' : ''; }).join(' '); })() + '\
       </div>\
     </div>\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Traffic</div><div class="value cyan">' + fmt(pg.traffic) + '</div></div>\
-      <div class="stat-card"><div class="label">Conversion</div><div class="value">' + (conv || 0) + '%</div></div>\
-      <div class="stat-card"><div class="label">Positions</div><div class="value" id="page-pos-value">' + pd.positions.length + '</div>\
-        <div class="sub" id="page-sold-value">' + sold + ' sold / ' + (pd.positions.length - sold) + ' available</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green" id="page-rev-value">' + fmtC(rev) + '</div></div>\
-      <div class="stat-card"><div class="label">Estimated eFTD</div><div class="value cyan" id="page-eftd-value">' + fmt(eftd) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(pg.traffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + (conv || 0) + '%</div><div class="stat-lbl">Conversion</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val" id="page-pos-value">' + pd.positions.length + '</div><div class="stat-lbl" id="page-sold-value">' + sold + ' sold / ' + (pd.positions.length - sold) + ' avail.</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green" id="page-rev-value">' + fmtC(rev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val cyan" id="page-eftd-value">' + fmt(eftd) + '</div><div class="stat-lbl">Est. eFTD</div></div>\
     </div>\
     ' + (!isFullYear() ? '<div class="propagation-note">Changes made for ' + MONTH_LABELS[selectedMonth] + ' are automatically propagated to the following months</div>' : '') + '\
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">\
       <h3 style="font-size:15px;font-weight:600">Positions</h3>\
       ' + getScanIcon(pageUrl) + '\
       ' + (function() { var ls = pd.lastScanned; if (!ls) return '<span style="font-size:11px;color:var(--text-muted)">Never scanned</span>'; var d = new Date(ls); return '<span style="font-size:11px;color:var(--text-muted)">Last scanned ' + d.toLocaleDateString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) + '</span>'; })() + '\
-      ' + (pd.noRanking ? '<span class="badge" style="background:var(--yellow);color:#333;font-size:10px">No ranking</span>' : '') + '\
+      ' + (pd.noRanking ? '<span class="badge" style="background:var(--yellow);color:#1a1a1a;font-size:10px;font-weight:700">No ranking</span>' : '') + '\
       <span style="font-size:12px;color:var(--text-muted)">(drag and drop to reorder)</span>\
       <button class="scrape-btn" id="scrape-btn" onclick="scrapePositions(\'' + esc(pageUrl) + '\')" ' + (isFullYear() || pd.noRanking ? 'disabled title="' + (pd.noRanking ? 'No ranking page' : 'Select a month') + '"' : '') + '>\uD83D\uDD0D Scan page</button>\
       <button class="btn-sm" onclick="addPositionManually(\'' + esc(pageUrl) + '\')" ' + (isFullYear() ? 'disabled title="Select a month"' : '') + ' style="margin-left:auto">+ Add position</button>\
+      ' + (function() {
+        var asanaUrl = typeof getSiteMarketAsanaUrl === 'function' ? getSiteMarketAsanaUrl(pg.siteName, currentMarket) : '';
+        var disabled = isFullYear() || !asanaUrl;
+        var title = !asanaUrl ? 'Configure Asana project URL in Sites Database first' : 'Create Asana task for position updates';
+        return '<button class="btn-asana" onclick="showAsanaTaskModal(\'' + esc(pageUrl) + '\')" ' + (disabled ? 'disabled' : '') + ' title="' + title + '"><svg viewBox="0 0 32 32" fill="currentColor"><circle cx="16" cy="9" r="5"/><circle cx="7" cy="23" r="5"/><circle cx="25" cy="23" r="5"/></svg> Asana Task</button>';
+      })() + '\
     </div>\
-    <div id="positions-container"></div>';
+    <div id="positions-container"></div>\
+    ' + renderLastScanResults(pd) + '';
 
   renderPositions(pageUrl);
 }
@@ -80,11 +90,40 @@ function renderPositions(pageUrl) {
     var eftd = getPositionEFTD(traffic, conv, pos.name, idx, pd.positions.length);
     var ctr = getPositionCTR(pos.name, idx, pd.positions.length);
     var alert = alertData[idx];
-    var cardClass = alert ? 'mismatch' : (md.sold ? 'sold' : '');
+    // Determine position status: free, sold, draft, offered
+    var posStatus = 'free';
+    var posStatusLabel = '<span style="color:var(--text-muted);font-size:11px">Free</span>';
+    var isLocked = false;
+    if (md.sold) {
+      posStatus = 'sold';
+      posStatusLabel = '<span style="color:var(--primary);font-size:11px;font-weight:600">Sold</span>';
+    } else if (md.proposalStatus === 'draft') {
+      posStatus = 'draft';
+      posStatusLabel = '<span style="color:#8000c0;font-size:11px;font-weight:600">Draft</span>';
+      isLocked = true;
+    } else if (md.proposalStatus === 'offered') {
+      posStatus = 'offered';
+      posStatusLabel = '<span style="color:#8000c0;font-size:11px;font-weight:600">Offered</span>';
+      isLocked = true;
+    }
+    var cardClass = alert ? 'mismatch' : (posStatus === 'sold' ? 'sold' : (isLocked ? 'proposed' : ''));
+    var disabledAttr = (isFullYear() || isLocked) ? 'disabled' : '';
     // M-1 status
     var prevMonth = typeof getPreviousMonth === 'function' ? getPreviousMonth(selectedMonth) : null;
     var prevMd = prevMonth ? getMonthDataForMonth(pos, prevMonth) : {};
     var m1Label = prevMd.sold ? '<span class="badge badge-green" style="font-size:10px">Sold M-1' + (prevMd.operator ? ': ' + esc(prevMd.operator) : '') + '</span>' : '';
+
+    // Price display: show price for sold, draft, offered
+    var priceHtml = '';
+    if (posStatus === 'sold') {
+      priceHtml = '<input type="number" value="' + md.price + '" min="0" step="50" style="width:80px"' +
+        ' oninput="updatePrice(\'' + esc(pageUrl) + '\',' + idx + ',this.value)"' +
+        ' onchange="updatePrice(\'' + esc(pageUrl) + '\',' + idx + ',this.value)" ' + disabledAttr + '>';
+    } else if (isLocked && md.price) {
+      priceHtml = '<span style="color:#8000c0;font-size:12px;font-weight:600">' + fmtC(md.price) + '</span>';
+    } else {
+      priceHtml = '<span style="color:var(--text-muted);font-size:12px">-</span>';
+    }
 
     return '<div class="pos-card ' + cardClass + '" draggable="true" data-index="' + idx + '"' +
       ' ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"' +
@@ -94,20 +133,18 @@ function renderPositions(pageUrl) {
       '<div class="pos-num">' + (posNameLower === 'banner' ? 'B' : posNameLower === 'link' ? 'L' : posNameLower === 'operator of the month' ? 'O' : (idx + 1)) + '</div>' +
       '<div class="pos-info">' +
         '<div class="pos-name">Position: ' + esc(pos.name) + ' \u00B7 CTR: ' + fmtP(ctr) + '</div>' +
-        '<div class="pos-operator">' + (md.operator ? (function(){ var logo = getOperatorLogo(md.operator); return logo ? '<img src="' + logo + '" width="16" height="16" style="vertical-align:middle;margin-right:4px;border-radius:2px" onerror="this.style.display=\'none\'">' : ''; })() + esc(md.operator) : '<em>No operator</em>') + (alert ? ' <span class="warn-icon" title="Scrape: ' + esc(alert.found || 'absent') + ' (expected: ' + esc(alert.expected || md.operator) + ')">\u26A0\uFE0F</span>' : '') + '</div>' +
+        '<div class="pos-operator">' + (md.operator ? (function(){ var logo = getOperatorLogo(md.operator); return logo ? '<img src="' + logo + '" width="16" height="16" style="border-radius:2px;flex-shrink:0" onerror="this.style.display=\'none\'">' : ''; })() + '<span>' + esc(md.operator) + '</span>' : '<em>No operator</em>') + (alert ? ' <span class="warn-icon" title="Scrape: ' + esc(alert.found || 'absent') + ' (expected: ' + esc(alert.expected || md.operator) + ')">\u26A0\uFE0F</span>' : '') + '</div>' +
       '</div>' +
       '<div class="pos-eftd" title="Estimated eFTD">' + eftd.toFixed(1) + ' eFTD</div>' +
-      '<div style="text-align:center"><label class="toggle">' +
-        '<input type="checkbox" ' + (md.sold ? 'checked' : '') + ' onchange="toggleSold(\'' + esc(pageUrl) + '\',' + idx + ',this.checked)" ' + (isFullYear() ? 'disabled' : '') + '>' +
+      '<div style="display:flex;align-items:center;justify-content:center"><label class="toggle">' +
+        '<input type="checkbox" ' + (md.sold ? 'checked' : '') + ' onchange="toggleSold(\'' + esc(pageUrl) + '\',' + idx + ',this.checked)" ' + disabledAttr + '>' +
         '<span class="slider"></span>' +
       '</label></div>' +
-      '<div style="font-size:11px;color:var(--text-muted)">Sold</div>' +
-      '<div>' + (md.sold ? '<input type="number" value="' + md.price + '" min="0" step="50" style="width:80px"' +
-        ' oninput="updatePrice(\'' + esc(pageUrl) + '\',' + idx + ',this.value)"' +
-        ' onchange="updatePrice(\'' + esc(pageUrl) + '\',' + idx + ',this.value)" ' + (isFullYear() ? 'disabled' : '') + '>' : '<span style="color:var(--text-muted);font-size:12px">-</span>') + '</div>' +
+      '<div style="display:flex;align-items:center">' + posStatusLabel + '</div>' +
+      '<div>' + priceHtml + '</div>' +
       '<div>' + (m1Label || '<span style="font-size:11px;color:var(--text-muted)">-</span>') + '</div>' +
-      '<div><button class="btn-sm" onclick="showOperatorSelector(\'' + esc(pageUrl) + '\',' + idx + ',this)" ' + (isFullYear() ? 'disabled' : '') + '>Change</button></div>' +
-      '<div style="text-align:center"><button class="btn-sm" style="color:var(--red);border-color:var(--red);padding:2px 6px" onclick="deletePosition(\'' + esc(pageUrl) + '\',' + idx + ')" ' + (isFullYear() ? 'disabled' : '') + ' title="Delete position">\u2715</button></div>' +
+      '<div><button class="btn-sm" onclick="showOperatorSelector(\'' + esc(pageUrl) + '\',' + idx + ',this)" ' + disabledAttr + '>Change</button></div>' +
+      '<div style="text-align:center"><button class="btn-sm" style="color:var(--red);border-color:var(--red);padding:2px 6px" onclick="deletePosition(\'' + esc(pageUrl) + '\',' + idx + ')" ' + disabledAttr + ' title="Delete position">\u2715</button></div>' +
     '</div>';
   }).join('');
 }
@@ -931,4 +968,193 @@ function processOperatorDBImport() {
     if (btn) { btn.disabled = false; btn.textContent = 'Import'; }
   };
   reader.readAsText(fileInput.files[0]);
+}
+
+// ==================== ASANA TASK CREATION ====================
+
+function showAsanaTaskModal(pageUrl) {
+  var pg = getPage(pageUrl);
+  var pd = getMarketPosData()[pageUrl];
+  if (!pg || !pd) return;
+
+  var existing = document.getElementById('asana-modal');
+  if (existing) existing.remove();
+
+  var contact = typeof getSiteMarketContact === 'function' ? getSiteMarketContact(pg.siteName, currentMarket) : { name: '', email: '' };
+  var asanaUrl = typeof getSiteMarketAsanaUrl === 'function' ? getSiteMarketAsanaUrl(pg.siteName, currentMarket) : '';
+
+  // Default deadline: 7 days from now
+  var defDate = new Date();
+  defDate.setDate(defDate.getDate() + 7);
+  var defDateStr = defDate.toISOString().split('T')[0];
+
+  // Build positions list with checkboxes
+  var posRows = pd.positions.map(function(pos, idx) {
+    var md = getMonthData(pos);
+    var statusText = 'Free';
+    var statusColor = 'var(--text-muted)';
+    if (md.sold) { statusText = 'Sold'; statusColor = 'var(--primary)'; }
+    else if (md.proposalStatus === 'draft') { statusText = 'Draft'; statusColor = '#8000c0'; }
+    else if (md.proposalStatus === 'offered') { statusText = 'Offered'; statusColor = '#8000c0'; }
+
+    var opDisplay = md.operator ? esc(md.operator) : '<em style="color:var(--text-muted)">—</em>';
+
+    return '<tr>' +
+      '<td style="text-align:center"><input type="checkbox" class="asana-pos-check" data-idx="' + idx + '" checked></td>' +
+      '<td style="font-weight:600">' + esc(pos.name) + '</td>' +
+      '<td>' + opDisplay + '</td>' +
+      '<td style="color:' + statusColor + ';font-weight:600">' + statusText + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var contactDisplay = '';
+  if (contact.name && contact.email) contactDisplay = esc(contact.name) + ' (' + esc(contact.email) + ')';
+  else if (contact.email) contactDisplay = esc(contact.email);
+  else if (contact.name) contactDisplay = esc(contact.name);
+  else contactDisplay = '<span style="color:var(--red)">No contact configured</span>';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'asana-modal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '\
+    <div class="modal" style="width:700px">\
+      <div class="modal-header">\
+        <h3 style="font-size:16px;font-weight:700;margin:0">Create Asana Task</h3>\
+        <button onclick="closeAsanaModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">&times;</button>\
+      </div>\
+      <div style="display:flex;flex-direction:column;gap:14px">\
+        <div style="background:var(--surface2);padding:10px 14px;border-radius:3px;font-size:13px">\
+          <strong>' + esc(pg.article) + '</strong><br>\
+          <span style="color:var(--text-muted)">' + esc(pg.siteName) + ' \u00B7 ' + getFlag(currentMarket) + ' ' + esc(currentMarket) + '</span>\
+        </div>\
+        <div>\
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Task Title</label>\
+          <input type="text" id="asana-task-title" value="Position update: ' + esc(pg.article).replace(/"/g, '&quot;') + ' (' + esc(currentMarket) + ')" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
+        </div>\
+        <div>\
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Positions to include</label>\
+          <table class="data-table" style="font-size:12px">\
+            <thead><tr>\
+              <th style="text-align:center;width:30px"><input type="checkbox" checked onchange="toggleAllAsanaPos(this.checked)"></th>\
+              <th>Position</th>\
+              <th>Operator</th>\
+              <th>Status</th>\
+            </tr></thead>\
+            <tbody>' + posRows + '</tbody>\
+          </table>\
+        </div>\
+        <div style="display:flex;gap:12px">\
+          <div style="flex:1">\
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Deadline</label>\
+            <input type="date" id="asana-deadline" value="' + defDateStr + '" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
+          </div>\
+          <div style="flex:1">\
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Assignee</label>\
+            <div style="padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface2);font-size:13px">' + contactDisplay + '</div>\
+          </div>\
+        </div>\
+        <div style="font-size:12px;color:var(--text-muted)">\
+          Project: <a href="' + esc(asanaUrl) + '" target="_blank" style="color:var(--primary)">' + esc(asanaUrl || 'Not configured') + '</a>\
+        </div>\
+        <div class="modal-actions">\
+          <button class="btn-cancel" onclick="closeAsanaModal()">Cancel</button>\
+          <button class="btn-primary" id="asana-submit-btn" onclick="doCreateAsanaTask(\'' + esc(pageUrl).replace(/'/g, "\\'") + '\')">Create Task</button>\
+        </div>\
+      </div>\
+    </div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeAsanaModal(); });
+}
+
+function toggleAllAsanaPos(checked) {
+  document.querySelectorAll('.asana-pos-check').forEach(function(cb) { cb.checked = checked; });
+}
+
+function closeAsanaModal() {
+  var modal = document.getElementById('asana-modal');
+  if (modal) modal.remove();
+}
+
+async function doCreateAsanaTask(pageUrl) {
+  var pg = getPage(pageUrl);
+  var pd = getMarketPosData()[pageUrl];
+  if (!pg || !pd) return;
+
+  var btn = document.getElementById('asana-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+
+  var taskName = (document.getElementById('asana-task-title').value || '').trim();
+  var deadline = document.getElementById('asana-deadline').value;
+  var contact = typeof getSiteMarketContact === 'function' ? getSiteMarketContact(pg.siteName, currentMarket) : { name: '', email: '' };
+  var asanaUrl = typeof getSiteMarketAsanaUrl === 'function' ? getSiteMarketAsanaUrl(pg.siteName, currentMarket) : '';
+
+  // Gather selected positions
+  var checks = document.querySelectorAll('.asana-pos-check');
+  var selectedPositions = [];
+  checks.forEach(function(cb) {
+    if (cb.checked) {
+      var idx = parseInt(cb.getAttribute('data-idx'));
+      var pos = pd.positions[idx];
+      var md = getMonthData(pos);
+      selectedPositions.push({ name: pos.name, idx: idx, md: md });
+    }
+  });
+
+  if (selectedPositions.length === 0) {
+    showToast('Select at least one position', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Task'; }
+    return;
+  }
+
+  // Build Asana html_notes (Asana supports limited HTML: p, strong, em, ul, ol, li, a, br)
+  var htmlNotes = '<body>';
+  htmlNotes += '<strong>Page:</strong> ' + escHtml(pg.article) + '\n';
+  htmlNotes += '<a href="' + escHtml(pg.url) + '">' + escHtml(pg.url) + '</a>\n\n';
+  htmlNotes += '<strong>Site:</strong> ' + escHtml(pg.siteName) + ' | <strong>Market:</strong> ' + escHtml(currentMarket) + '\n\n';
+  htmlNotes += '<strong>Positions:</strong>\n';
+  htmlNotes += '<ul>';
+  selectedPositions.forEach(function(sp) {
+    var status = sp.md.sold ? 'Sold' : 'Free';
+    if (sp.md.proposalStatus === 'draft') status = 'Draft';
+    else if (sp.md.proposalStatus === 'offered') status = 'Offered';
+    var line = '<strong>' + escHtml(sp.name) + '</strong>';
+    line += ' — ' + status;
+    if (sp.md.operator) line += ' — ' + escHtml(sp.md.operator);
+    htmlNotes += '<li>' + line + '</li>';
+  });
+  htmlNotes += '</ul>\n';
+  htmlNotes += '<em>Created from Rankings Management App</em>';
+  htmlNotes += '</body>';
+
+  try {
+    var resp = await fetch('/api/asana/create-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        taskName: taskName,
+        htmlNotes: htmlNotes,
+        dueDate: deadline,
+        assigneeEmail: contact.email || '',
+        projectUrl: asanaUrl
+      })
+    });
+    var result = await resp.json();
+    if (result.success) {
+      closeAsanaModal();
+      var warningMsg = result.warnings && result.warnings.length ? ' (' + result.warnings.join(', ') + ')' : '';
+      showToast('Asana task created!' + warningMsg, 'success', 6000);
+    } else {
+      showToast('Error: ' + (result.error || 'Unknown error'), 'error', 6000);
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Task'; }
+    }
+  } catch(e) {
+    showToast('Network error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Task'; }
+  }
+}
+
+// HTML escape helper for Asana notes
+function escHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

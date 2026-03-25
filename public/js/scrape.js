@@ -57,8 +57,9 @@ function processScrapeResults(pageUrl, scrapedOps) {
   var pd = positionData[currentMarket][pageUrl];
   if (!pd) return;
 
-  // Record last scan timestamp
+  // Record last scan timestamp and raw results
   pd.lastScanned = new Date().toISOString();
+  pd.lastScanResults = scrapedOps.map(function(s) { return { raw: s.name }; });
 
   // Clear previous alerts for this page
   if (!scrapeAlerts[currentMarket]) scrapeAlerts[currentMarket] = {};
@@ -132,13 +133,6 @@ function processScrapeResults(pageUrl, scrapedOps) {
     var pos = pd.positions[posIdx];
     var md = getMonthDataForMonth(pos, month);
     var resolvedName = resolveOperatorName(scraped.name, currentMarket);
-
-    if (resolvedName && !getMarketOperators().includes(resolvedName)) {
-      if (!operators[currentMarket]) operators[currentMarket] = [];
-      operators[currentMarket].push(resolvedName);
-      operators[currentMarket].sort(function(a, b) { return a.localeCompare(b, 'en'); });
-      saveOps();
-    }
 
     var inDB = isInOperatorDB(resolvedName);
 
@@ -244,4 +238,48 @@ function addPositionManually(pageUrl) {
   savePos();
   renderPageDetail(document.getElementById('main-content'), pageUrl);
   showToast('Position "' + name + '" added', 'success');
+}
+
+// Render last scan results block (informational only)
+function renderLastScanResults(pd) {
+  if (!pd || !pd.lastScanResults || !pd.lastScanResults.length) return '';
+
+  var rows = pd.lastScanResults.map(function(r, i) {
+    var resolved = resolveOperatorName(r.raw, currentMarket);
+    var inDB = (function(name) {
+      var db = operatorDB[currentMarket] || {};
+      for (var opKey in db) {
+        if (operatorsMatch(opKey, name) || operatorsMatch(db[opKey].baseName || opKey, name)) return true;
+      }
+      return false;
+    })(resolved);
+
+    var statusIcon = inDB
+      ? '<span style="color:var(--green)" title="In Operator DB">✓</span>'
+      : '<span style="color:var(--red)" title="Not in Operator DB">✗</span>';
+
+    var resolvedCol = resolved !== r.raw
+      ? '<td style="padding:4px 10px;font-size:12px;color:var(--text)">' + esc(resolved) + '</td>'
+      : '<td style="padding:4px 10px;font-size:12px;color:var(--text-muted)">—</td>';
+
+    return '<tr style="border-bottom:1px solid var(--border)">' +
+      '<td style="padding:4px 10px;font-size:12px;color:var(--text-muted);text-align:center">' + (i + 1) + '</td>' +
+      '<td style="padding:4px 10px;font-size:12px;font-family:monospace;color:var(--text)">' + esc(r.raw) + '</td>' +
+      resolvedCol +
+      '<td style="padding:4px 10px;text-align:center">' + statusIcon + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return '<details style="margin-top:20px">' +
+    '<summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);user-select:none">Last scan raw results (' + pd.lastScanResults.length + ' elements)</summary>' +
+    '<div style="margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+    '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr style="background:var(--surface2)">' +
+    '<th style="padding:6px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-align:center">#</th>' +
+    '<th style="padding:6px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-align:left">Raw scraped</th>' +
+    '<th style="padding:6px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-align:left">Resolved</th>' +
+    '<th style="padding:6px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-align:center">In DB</th>' +
+    '</tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table></div></details>';
 }

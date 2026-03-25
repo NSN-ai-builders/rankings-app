@@ -14,11 +14,14 @@ async function tryAutoLaunch() {
         if (data.operatorConfig) operatorConfig = data.operatorConfig;
         if (data.operatorDB) operatorDB = data.operatorDB;
         if (data.operatorVariants) operatorVariants = data.operatorVariants;
+        if (data.gscTraffic) window.gscTraffic = data.gscTraffic;
+        if (data.proposals) { proposals = data.proposals; console.log('[AUTO-LAUNCH] Proposals:', Object.keys(proposals).length); }
+        if (data.sitesDB) sitesDB = data.sitesDB;
         processData();
         autoDetectSiteConfigs();
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('upload-screen').style.display = 'none';
-        showMarketScreen();
+        showHomeScreen();
         console.log('[AUTO-LAUNCH] Success - loaded from server');
         return true;
       }
@@ -128,6 +131,8 @@ var operatorDB = {}; // { market: { operatorName: { baseName, displayName, am, u
 var operatorVariants = {}; // { normalizedName: canonicalName }
 var gscTraffic = {}; // { market: { url: { clicks, lastUpdated } } }
 var scanLog = []; // scan history
+var proposals = {}; // { id: { operator, market, am, type, status, items, ... } }
+var sitesDB = {}; // { siteName: { name, domain, color, contact, pages: [...] } }
 
 // ==================== COUNTRY FLAGS ====================
 const COUNTRY_FLAGS = {
@@ -295,6 +300,17 @@ function getOperatorLogo(opName, market) {
   return '';
 }
 
+function getOperatorLogoUrl(opName, market) {
+  return getOperatorLogo(opName, market);
+}
+
+function getOperatorLogoHtml(opName, market, size) {
+  var url = getOperatorLogo(opName, market);
+  if (!url) return '';
+  var s = size || 16;
+  return '<img src="' + url + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:2px;object-fit:contain;vertical-align:middle" onerror="this.style.display=\'none\'">';
+}
+
 function colorToLightBg(hex) {
   if (!hex) return '';
   var r = parseInt(hex.slice(1,3), 16);
@@ -355,12 +371,12 @@ async function launch() {
   processData();
   autoDetectSiteConfigs();
   document.getElementById('upload-screen').style.display = 'none';
-  showMarketScreen();
+  showHomeScreen();
 }
 
 // ==================== EXPORT / IMPORT ====================
 function exportData() {
-  var blob = new Blob([JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, operatorDB: operatorDB, operatorVariants: operatorVariants, gscTraffic: gscTraffic, scanLog: scanLog, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+  var blob = new Blob([JSON.stringify({ operators: operators, positionData: positionData, scrapeAlerts: scrapeAlerts, operatorDB: operatorDB, operatorVariants: operatorVariants, gscTraffic: gscTraffic, scanLog: scanLog, proposals: proposals, sitesDB: sitesDB, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'rankings-data-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -381,6 +397,8 @@ function importData(e) {
       if (data.operatorVariants) operatorVariants = Object.assign({}, operatorVariants, data.operatorVariants);
       if (data.gscTraffic) gscTraffic = Object.assign({}, gscTraffic, data.gscTraffic);
       if (data.scanLog) scanLog = data.scanLog;
+      if (data.proposals) proposals = Object.assign({}, proposals, data.proposals);
+      if (data.sitesDB) sitesDB = Object.assign({}, sitesDB, data.sitesDB);
       saveAll();
       renderCurrentView();
       showToast('Import successful!', 'success');

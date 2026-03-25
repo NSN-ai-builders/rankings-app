@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
@@ -94,7 +95,7 @@ app.get('/api/data', requireAuth, (req, res) => {
 
 app.post('/api/data', requireAuth, (req, res) => {
   try {
-    const { operators, positionData, scrapeAlerts, rawPagesCSV, rawPositionsCSV, siteConfig, operatorConfig, operatorDB, operatorVariants } = req.body;
+    const { operators, positionData, scrapeAlerts, rawPagesCSV, rawPositionsCSV, siteConfig, operatorConfig, operatorDB, operatorVariants, proposals, sitesDB } = req.body;
     console.log(`[POST /api/data] Received - operators: ${Object.keys(operators || {}).length}, positionData: ${Object.keys(positionData || {}).length}, hasCSV: ${!!(rawPagesCSV && rawPositionsCSV)}, operatorDB: ${Object.keys(operatorDB || {}).length}`);
 
     // Preserve server-side fields (gscTraffic, gscLastSync, scanConfig) that the frontend doesn't send
@@ -117,6 +118,21 @@ app.post('/api/data', requireAuth, (req, res) => {
     if (operatorConfig) data.operatorConfig = operatorConfig;
     if (operatorDB) data.operatorDB = operatorDB;
     if (operatorVariants) data.operatorVariants = operatorVariants;
+    // SitesDB: always trust what the frontend sends (including empty object after delete)
+    if (sitesDB !== undefined && sitesDB !== null) {
+      data.sitesDB = sitesDB;
+    } else if (existing.sitesDB) {
+      data.sitesDB = existing.sitesDB;
+    }
+
+    // Proposals: always trust what the frontend sends (including empty object after delete)
+    if (proposals !== undefined && proposals !== null) {
+      data.proposals = proposals;
+    } else if (existing.proposals) {
+      data.proposals = existing.proposals;
+    } else {
+      data.proposals = {};
+    }
 
     // Preserve fields from existing data if not sent by frontend
     if (!data.rawPagesCSV && existing.rawPagesCSV) data.rawPagesCSV = existing.rawPagesCSV;
@@ -136,6 +152,145 @@ app.post('/api/data', requireAuth, (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ==================== PROPOSAL PDF ====================
+app.get('/api/proposal-pdf', requireAuth, async (req, res) => {
+  try {
+    const propId = req.query.id;
+    if (!propId) return res.status(400).json({ error: 'Missing id' });
+
+    let data = {};
+    try { data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch(e) {}
+    const prop = (data.proposals || {})[propId];
+    if (!prop) return res.status(404).json({ error: 'Proposal not found' });
+
+    const items = prop.items || [];
+    const totalPrice = items.reduce((s, i) => s + (i.price || 0), 0);
+    const dateStr = prop.sentDate ? new Date(prop.sentDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    const typeLabels = { new_offer: 'New Offer', full_package: 'Full Package', renewal: 'Renewal' };
+
+    // Build HTML
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; padding: 40px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 3px solid #1a1a1a; }
+  .header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .header .ref { font-size: 12px; color: #666; margin-top: 4px; }
+  .header .date { font-size: 14px; text-align: right; color: #666; }
+  .info-section { margin-bottom: 30px; display: flex; gap: 40px; }
+  .info-block { }
+  .info-block .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 4px; }
+  .info-block .value { font-size: 15px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+  th { background: #1a1a1a; color: #fff; padding: 10px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
+  td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #e0e0e0; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .total-row { background: #1a1a1a !important; color: #fff; font-weight: 700; }
+  .total-row td { border-bottom: none; font-size: 15px; }
+  .price-box { margin: 30px 0; text-align: center; padding: 24px; background: #f0f7ff; border: 2px solid #0066cc; border-radius: 8px; }
+  .price-box .label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  .price-box .amount { font-size: 36px; font-weight: 800; color: #0066cc; margin-top: 4px; }
+  .price-box .period { font-size: 12px; color: #888; margin-top: 4px; }
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #888; display: flex; justify-content: space-between; }
+  .package-details { margin-bottom: 24px; padding: 14px 18px; background: #fff8f0; border-left: 4px solid #cc6600; font-size: 13px; }
+  .notes { margin: 20px 0; padding: 12px 16px; background: #f5f5f5; border-radius: 4px; font-size: 12px; color: #555; }
+  .link { color: #0066cc; text-decoration: none; font-size: 12px; word-break: break-all; }
+</style>
+</head><body>
+
+<div class="header">
+  <div>
+    <h1>DEAL PROPOSAL</h1>
+    <div class="ref">Ref: ${propId.toUpperCase()}</div>
+  </div>
+  <div class="date">${dateStr}</div>
+</div>
+
+<div class="info-section">
+  <div class="info-block">
+    <div class="label">Operator</div>
+    <div class="value">${escHtml(prop.operator)}</div>
+  </div>
+  <div class="info-block">
+    <div class="label">Market</div>
+    <div class="value">${escHtml(prop.market)}</div>
+  </div>
+  <div class="info-block">
+    <div class="label">Type</div>
+    <div class="value">${typeLabels[prop.type] || prop.type}</div>
+  </div>
+  <div class="info-block">
+    <div class="label">Account Manager</div>
+    <div class="value">${escHtml(prop.am)}</div>
+  </div>
+</div>
+
+${prop.type === 'full_package' && prop.packageDetails ? '<div class="package-details"><strong>Package Details:</strong> ' + escHtml(prop.packageDetails) + '</div>' : ''}
+
+${prop.menuMode ? '<div style="margin-bottom:16px;padding:12px 18px;background:#f0f7ff;border-left:4px solid #0066cc;font-size:13px"><strong>Menu Mode:</strong> Below is a selection of available positions. Choose the ones that best fit your needs and budget.</div>' : ''}
+
+<table>
+  <thead><tr>
+    <th>Site</th>
+    <th>Page</th>
+    <th>Link</th>
+    <th style="text-align:center">Position</th>
+    <th style="text-align:right">Est. Traffic</th>
+    ${prop.showPriceDetail ? '<th style="text-align:right">Price</th>' : ''}
+  </tr></thead>
+  <tbody>
+    ${items.map(item => `<tr>
+      <td>${escHtml(item.siteName)}</td>
+      <td>${escHtml(item.pageTitle)}</td>
+      <td><a class="link" href="${escHtml(item.pageUrl)}">${escHtml(item.pageUrl.replace(/^https?:\/\/(www\.)?/, '').substring(0, 50))}</a></td>
+      <td style="text-align:center">${escHtml(item.positionName)}</td>
+      <td style="text-align:right">${Math.round(item.traffic || 0).toLocaleString()}</td>
+      ${prop.showPriceDetail ? '<td style="text-align:right">' + Math.round(item.price || 0).toLocaleString() + ' €</td>' : ''}
+    </tr>`).join('')}
+    ${prop.showPriceDetail ? `<tr class="total-row">
+      <td colspan="5" style="text-align:right">TOTAL</td>
+      <td style="text-align:right">${Math.round(totalPrice).toLocaleString()} €</td>
+    </tr>` : ''}
+  </tbody>
+</table>
+
+<div class="price-box">
+  <div class="label">Total Package Price</div>
+  <div class="amount">${Math.round(totalPrice).toLocaleString()} €</div>
+  <div class="period">${items[0] && items[0].months ? items[0].months.length + ' month(s)' : ''} — per month</div>
+</div>
+
+${prop.notes ? '<div class="notes"><strong>Notes:</strong> ' + escHtml(prop.notes) + '</div>' : ''}
+
+<div class="footer">
+  <div>Account Manager: ${escHtml(prop.am)}</div>
+  <div>Generated on ${new Date().toLocaleDateString('en-GB')}</div>
+</div>
+
+</body></html>`;
+
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' } });
+    await browser.close();
+
+    const filename = 'proposal-' + (prop.operator || '').replace(/[^a-zA-Z0-9]/g, '_') + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+    res.send(Buffer.from(pdfBuffer));
+  } catch (err) {
+    console.error('[PDF] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 // ==================== SCRAPE API ====================
 
@@ -186,14 +341,24 @@ function cleanName(raw) {
   // Remove emojis
   name = name.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '');
   // Take only the part before " – " or " - " or ":" (operator name, not description)
-  name = name.split(/\s*[–—]\s*/)[0].split(/:\s/)[0].trim();
+  name = name.split(/\s*[–—]\s*/)[0].split(/:/)[0].trim();
   // Remove leading numbers like "1. " or "1) "
   name = name.replace(/^\d+[\.\)\-\s]+/, '').trim();
+  // Remove promo code patterns like "Código Bet365:GANHE365Bet365" → "Bet365"
+  // Pattern: "Código X" or text followed by a promo code glued to the operator name
+  name = name.replace(/^c[oó]digo\s+/i, '').trim();
+  // Remove promo codes glued to operator name (e.g. "GANHE365Bet365" → "Bet365")
+  // Detect: ALL_CAPS_CODE followed by CapitalizedName
+  name = name.replace(/^[A-Z0-9]{4,}([A-Z][a-z].*)$/, '$1').trim();
   // Remove common suffixes: "app", "app de apostas", "aplicativo", "bônus"
   name = name.replace(/\s+app\b.*$/i, '').trim();
   name = name.replace(/\s+aplicativo\b.*$/i, '').trim();
   // Remove trailing ":" or " -"
   name = name.replace(/[\s:\-]+$/, '').trim();
+  // Reject section titles / long descriptive phrases
+  if (/^melhor(?:es)?\s+/i.test(name) && name.split(/\s+/).length > 3) return '';
+  // Reject descriptive phrases that are clearly not operator names
+  if (/^casa[s]?\s+de\s+aposta/i.test(name) && name.split(/\s+/).length > 3) return '';
   return name;
 }
 
@@ -259,11 +424,11 @@ function extractFromTable(tableContent) {
       cells.push(tdMatch[1].replace(/<[^>]+>/g, '').trim());
     }
     if (cells.length === 0) continue;
-    // Skip first row if it looks like a header (contains common header words)
+    // Skip first row if it looks like a header or descriptive label
     if (isFirstRow) {
       isFirstRow = false;
       const rowText = cells.join(' ').toLowerCase();
-      if (/plataforma|operador|licen[cç]a|destaque|caracter|crit[eé]rio|s[ií]mbolo|pagamento|ranking|posi[cç][aã]o|#|nome|site|casas?\s+(?:com|de|para)|visite|melhor|grupos?\s+de/i.test(rowText)) continue;
+      if (/plataforma|operador|licen[cç]a|destaque|caracter|crit[eé]rio|s[ií]mbolo|pagamento|ranking|posi[cç][aã]o|#|nome|site|casas?\s+(?:com|de|para|que)|visite|melhor|grupos?\s+de/i.test(rowText)) continue;
     }
     idx++;
     // Skip rows that look like step instructions or non-operator content
@@ -310,8 +475,16 @@ function extractFromUl(ulContent) {
   return items;
 }
 
-function extractPositions(html, pageUrl) {
+function extractPositions(rawHtml, pageUrl) {
   let positions = [];
+
+  // Strip nav, menu, header, footer, sidebar elements to avoid picking up navigation items
+  let html = rawHtml
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+    .replace(/<div[^>]*class="[^"]*(?:menu|nav|sidebar|widget|footer|header|breadcrumb)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
 
   // Strategy 0: Tip/palpites pages ONLY — extract operators from bookmaker images or affiliate links
   // Only run this for pages that are actually tip/palpites pages (detected by URL or content)
@@ -454,6 +627,8 @@ function extractPositions(html, pageUrl) {
       if (/<th[^>]*>[^<]*casa/i.test(tableContent)) continue;
       const headerText = (tableContent.match(/<tr[^>]*>([\s\S]*?)<\/tr>/i) || ['',''])[1].replace(/<[^>]+>/g, '').toLowerCase();
       if (/s[ií]mbolo|pagamento|crit[eé]rio|caracter[ií]stica/i.test(headerText)) continue;
+      // Skip tables about championships, leagues, sports events (not operator tables)
+      if (/campeonato|liga|divis[aã]o|torneio|league|eredivisie|bundesliga|premier|serie\s+[ab]|m[eé]dia\s+gol|ambas\s+marcam/i.test(headerText)) continue;
 
       const rows = extractFromTable(tableContent);
       if (rows.length >= 3 && looksLikeOperatorList(rows.map(r => r.name))) {
@@ -479,9 +654,8 @@ function extractPositions(html, pageUrl) {
     while ((olMatch = olRegex.exec(html)) !== null) {
       if (/breadcrumb/i.test(olMatch[0])) continue;
       const items = extractFromOl(olMatch[1]);
-      if (items.length >= 3 && looksLikeOperatorList(items)) {
+      if (items.length >= 3 && items.length <= 50 && looksLikeOperatorList(items)) {
         let score = items.length;
-        if (items.length > 50) score = 0;
         if (items.length >= 5 && items.length <= 30) score *= 2;
         if (score > bestOlScore) {
           bestOlScore = score;
@@ -512,6 +686,8 @@ function extractPositions(html, pageUrl) {
       }
     }
     if (numbered.length >= 3 && looksLikeOperatorList(numbered.map(n => n.name))) {
+      // Sort by position number to fix out-of-order headings
+      numbered.sort((a, b) => a.position - b.position);
       headingPositions = numbered;
     }
   }
@@ -541,17 +717,44 @@ function extractPositions(html, pageUrl) {
   // Pick the best result among all candidates
   if (positions.length === 0) {
     const candidates = [
-      { source: 'beauty_table', items: beautyTablePositions },
-      { source: 'table', items: bestTablePositions },
-      { source: 'ol', items: bestOlPositions },
-      { source: 'headings', items: headingPositions },
-      { source: 'ul', items: bestUlPositions }
-    ].filter(c => c.items.length >= 3);
+      { source: 'beauty_table', items: beautyTablePositions, priority: 50 },
+      { source: 'headings', items: headingPositions, priority: 40 },
+      { source: 'ol', items: bestOlPositions, priority: 20 },
+      { source: 'table', items: bestTablePositions, priority: 15 },
+      { source: 'ul', items: bestUlPositions, priority: 10 }
+    ].filter(c => c.items.length >= 3 && c.items.length <= 50);
 
     if (candidates.length > 0) {
-      // Prefer the candidate with the most operators
-      candidates.sort((a, b) => b.items.length - a.items.length);
-      positions = candidates[0].items;
+      // If headings exist but a larger list (OL/table) contains all heading names + more,
+      // prefer the larger list (headings are likely a highlighted subset)
+      const headingCandidate = candidates.find(c => c.source === 'headings');
+      if (headingCandidate) {
+        const betterList = candidates.find(c =>
+          c.source !== 'headings' && c.source !== 'beauty_table' &&
+          c.items.length > headingCandidate.items.length &&
+          c.items.length <= 30 &&
+          // The larger list must contain the first heading (most important operator)
+          c.items.some(ci => ci.name.toLowerCase() === headingCandidate.items[0].name.toLowerCase()) &&
+          // Check that the larger list contains most heading names
+          headingCandidate.items.filter(h =>
+            c.items.some(ci => ci.name.toLowerCase() === h.name.toLowerCase())
+          ).length >= headingCandidate.items.length * 0.6
+        );
+        if (betterList) {
+          positions = betterList.items;
+        } else {
+          positions = headingCandidate.items;
+        }
+      } else {
+        // No headings — sort by priority, then prefer reasonable-size lists
+        candidates.sort((a, b) => {
+          if (a.priority !== b.priority) return b.priority - a.priority;
+          const sizeScoreA = a.items.length <= 30 ? a.items.length : 30 - (a.items.length - 30);
+          const sizeScoreB = b.items.length <= 30 ? b.items.length : 30 - (b.items.length - 30);
+          return sizeScoreB - sizeScoreA;
+        });
+        positions = candidates[0].items;
+      }
     }
   }
 
@@ -916,8 +1119,8 @@ async function scrapeUrl(url, useBrowser) {
   }
 }
 
-async function runAutoScan(manualType) {
-  console.log('[SCAN] Starting auto-scan...');
+async function runAutoScan(manualType, filterMarket) {
+  console.log('[SCAN] Starting auto-scan...' + (filterMarket ? ' (market: ' + filterMarket + ')' : ''));
   let data;
   try {
     if (!fs.existsSync(DATA_FILE)) { console.log('[SCAN] No data file'); return; }
@@ -932,7 +1135,7 @@ async function runAutoScan(manualType) {
   const month = String(now.getMonth() + 1).padStart(2, '0') + '/26';
   console.log('[SCAN] Current month:', month);
 
-  const markets = Object.keys(positionData);
+  const markets = filterMarket ? Object.keys(positionData).filter(m => m.toLowerCase() === filterMarket.toLowerCase()) : Object.keys(positionData);
   let totalScanned = 0, totalAlerts = 0, totalErrors = 0, totalSkipped = 0;
   const logEntry = {
     timestamp: now.toISOString(),
@@ -1145,9 +1348,131 @@ app.get('/api/scan-log', requireAuth, (req, res) => {
 
 // Manual bulk scan trigger
 app.post('/api/scan-all', requireAuth, async (req, res) => {
-  res.json({ success: true, message: 'Scan started' });
+  const { market } = req.body || {};
+  res.json({ success: true, message: market ? 'Scan started for ' + market : 'Scan started' });
   // Run async so response returns immediately
-  runAutoScan('manual').catch(e => console.error('[SCAN] Manual scan failed:', e.message));
+  runAutoScan('manual', market || null).catch(e => console.error('[SCAN] Manual scan failed:', e.message));
+});
+
+// ==================== ASANA API ====================
+
+const ASANA_PAT = process.env.ASANA_PAT || '';
+const ASANA_TRACKING_PROJECT = process.env.ASANA_TRACKING_PROJECT || ''; // GID of the global tracking project
+
+function asanaRequest(method, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    if (!ASANA_PAT) return reject(new Error('ASANA_PAT not configured'));
+    const postData = body ? JSON.stringify({ data: body }) : null;
+    const options = {
+      hostname: 'app.asana.com',
+      path: '/api/1.0' + apiPath,
+      method: method,
+      headers: {
+        'Authorization': 'Bearer ' + ASANA_PAT,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+    if (postData) options.headers['Content-Length'] = Buffer.byteLength(postData);
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(parsed);
+          } else {
+            reject({ status: res.statusCode, body: parsed });
+          }
+        } catch(e) {
+          reject(new Error('Invalid JSON response from Asana'));
+        }
+      });
+    });
+    req.on('error', reject);
+    if (postData) req.write(postData);
+    req.end();
+  });
+}
+
+function extractAsanaProjectGid(url) {
+  if (!url) return null;
+  // Pure GID (just digits)
+  if (/^\d+$/.test(url.trim())) return url.trim();
+  // Format: app.asana.com/0/PROJECT_GID/...
+  let match = url.match(/app\.asana\.com\/0\/(\d+)/);
+  if (match) return match[1];
+  // Format: app.asana.com/1/WORKSPACE/project/PROJECT_GID/...
+  match = url.match(/\/project\/(\d+)/);
+  if (match) return match[1];
+  // Any long digit sequence in the URL as fallback
+  match = url.match(/(\d{10,})/);
+  return match ? match[1] : null;
+}
+
+// Check Asana connection
+app.get('/api/asana/check', requireAuth, async (req, res) => {
+  try {
+    if (!ASANA_PAT) return res.json({ connected: false, reason: 'ASANA_PAT not configured' });
+    const me = await asanaRequest('GET', '/users/me');
+    res.json({
+      connected: true,
+      user: me.data.name,
+      email: me.data.email,
+      trackingProject: ASANA_TRACKING_PROJECT || null
+    });
+  } catch(e) {
+    res.json({ connected: false, reason: e.message || 'Connection failed' });
+  }
+});
+
+// Create Asana task
+app.post('/api/asana/create-task', requireAuth, async (req, res) => {
+  try {
+    const { taskName, htmlNotes, dueDate, assigneeEmail, projectUrl, globalProject } = req.body;
+    const warnings = [];
+
+    // Extract project GID from URL
+    const projectGid = extractAsanaProjectGid(projectUrl);
+    if (!projectGid) return res.status(400).json({ error: 'Invalid Asana project URL' });
+
+    // Build projects array
+    const projects = [projectGid];
+    const trackingGid = globalProject || ASANA_TRACKING_PROJECT;
+    if (trackingGid) projects.push(trackingGid);
+
+    // Find assignee by email
+    let assigneeGid = null;
+    if (assigneeEmail) {
+      try {
+        const userResp = await asanaRequest('GET', '/users/' + encodeURIComponent(assigneeEmail));
+        assigneeGid = userResp.data.gid;
+      } catch(e) {
+        warnings.push('Assignee not found for ' + assigneeEmail + ' — task created unassigned');
+      }
+    }
+
+    // Create the task
+    const taskData = {
+      name: taskName,
+      html_notes: htmlNotes,
+      projects: projects
+    };
+    if (dueDate) taskData.due_on = dueDate;
+    if (assigneeGid) taskData.assignee = assigneeGid;
+
+    const result = await asanaRequest('POST', '/tasks', taskData);
+    const taskGid = result.data.gid;
+    const taskUrl = 'https://app.asana.com/0/' + projectGid + '/' + taskGid;
+
+    res.json({ success: true, taskGid, taskUrl, warnings });
+  } catch(e) {
+    console.error('[ASANA] Create task error:', e);
+    const msg = (e.body && e.body.errors && e.body.errors[0] && e.body.errors[0].message) || e.message || 'Unknown error';
+    res.status(500).json({ error: 'Asana API error: ' + msg });
+  }
 });
 
 // ==================== STATIC FILES ====================

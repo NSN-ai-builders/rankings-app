@@ -1,7 +1,25 @@
-// ==================== MARKET SCREEN ====================
-function showMarketScreen() {
+// ==================== HIDE ALL SCREENS HELPER ====================
+function hideAllScreens() {
+  ['home-screen','market-screen','app-screen','am-screen','operators-db-screen','proposals-screen','sites-db-screen','guidelines-screen'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+// ==================== HOME SCREEN ====================
+function showHomeScreen() {
+  hideAllScreens();
+  document.getElementById('home-screen').style.display = 'block';
+  currentMarket = null;
+}
+
+// Legacy alias — some code calls showMarketScreen
+function showMarketScreen() { showRankingsScreen(); }
+
+// ==================== RANKINGS / MARKET SCREEN ====================
+function showRankingsScreen() {
+  hideAllScreens();
   document.getElementById('market-screen').style.display = 'block';
-  document.getElementById('app-screen').style.display = 'none';
   currentMarket = null;
 
   var grid = document.getElementById('market-grid');
@@ -33,7 +51,7 @@ function showMarketScreen() {
 function enterMarket(market) {
   currentMarket = market;
   if (typeof applyGSCTraffic === 'function') applyGSCTraffic();
-  document.getElementById('market-screen').style.display = 'none';
+  hideAllScreens();
   document.getElementById('app-screen').style.display = 'block';
   document.getElementById('market-flag-top').textContent = getFlag(market);
   document.getElementById('market-name-top').textContent = market;
@@ -202,14 +220,18 @@ function renderDashboard(ct) {
   var monthLabel = isFullYear() ? 'Year 2026' : MONTH_LABELS[selectedMonth];
 
   ct.innerHTML = '\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Sites</div><div class="value">' + getMarketSites().length + '</div></div>\
-      <div class="stat-card"><div class="label">Pages</div><div class="value">' + pages.length + '</div></div>\
-      <div class="stat-card"><div class="label">Positions</div><div class="value">' + fmt(totalPos) + '</div>\
-        <div class="sub">' + fmt(soldPos) + ' sold / ' + fmt(totalPos - soldPos) + ' available</div></div>\
-      <div class="stat-card"><div class="label">Total Traffic</div><div class="value">' + fmt(totalTraffic) + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green">' + fmtC(totalRev) + '</div></div>\
-      <div class="stat-card"><div class="label">Estimated eFTD</div><div class="value cyan">' + fmt(totalEFTD) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + getMarketSites().length + '</div><div class="stat-lbl">Sites</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + pages.length + '</div><div class="stat-lbl">Pages</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalPos) + '</div><div class="stat-lbl">' + fmt(soldPos) + ' sold / ' + fmt(totalPos - soldPos) + ' avail.</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(totalRev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(totalEFTD) + '</div><div class="stat-lbl">Est. eFTD</div></div>\
     </div>\
     <div class="charts-grid" style="grid-template-columns:repeat(3,1fr)">\
       <div class="chart-card"><h3>Revenue by site</h3><canvas id="chart-site-rev"></canvas></div>\
@@ -283,7 +305,7 @@ function drawSiteRevenueChart(data) {
       labels: sorted.map(function(s) { return s[0]; }),
       datasets: [{ data: sorted.map(function(s) { return s[1]; }), backgroundColor: CHART_COLORS }]
     },
-    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 } } } } }
+    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#64748b', font: { size: 11 } } } } }
   });
   chartInstances.push(ch);
 }
@@ -307,8 +329,8 @@ function drawMonthlyChart(id, data, label, type, colorVar) {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,.2)' } },
-        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,.2)' } }
+        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.06)' } },
+        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.06)' } }
       }
     }
   });
@@ -330,8 +352,8 @@ function drawSiteTrafficChart(data) {
       indexAxis: 'y', responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(71,85,105,.2)' } },
-        y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } }
+        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,.06)' } },
+        y: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
       }
     }
   });
@@ -351,8 +373,8 @@ function drawOperatorRevenueChart(data) {
       indexAxis: 'y', responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(71,85,105,.2)' } },
-        y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } }
+        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,.06)' } },
+        y: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
       }
     }
   });
@@ -387,12 +409,16 @@ function renderSitesView(ct) {
   rows.forEach(function(entry) { var s = entry[1]; totalPos += s.positions; totalSold += s.sold; totalRev += s.revenue; totalTraffic += s.traffic; });
 
   ct.innerHTML = '\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Sites</div><div class="value">' + rows.length + '</div></div>\
-      <div class="stat-card"><div class="label">Pages</div><div class="value">' + pages.length + '</div></div>\
-      <div class="stat-card"><div class="label">Positions</div><div class="value">' + fmt(totalPos) + '</div><div class="sub">' + fmt(totalSold) + ' sold / ' + fmt(totalPos - totalSold) + ' available</div></div>\
-      <div class="stat-card"><div class="label">Traffic</div><div class="value">' + fmt(totalTraffic) + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green">' + fmtC(totalRev) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + rows.length + '</div><div class="stat-lbl">Sites</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + pages.length + '</div><div class="stat-lbl">Pages</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalPos) + '</div><div class="stat-lbl">' + fmt(totalSold) + ' sold / ' + fmt(totalPos - totalSold) + ' avail.</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(totalRev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
     </div>\
     <div class="filters"><input type="text" placeholder="Search for a site..." id="site-search" oninput="filterSites()"></div>\
     <table id="sites-table"><thead><tr>\
@@ -446,16 +472,20 @@ function renderPagesView(ct) {
   });
 
   ct.innerHTML = '\
-    <div id="site-header-banner" style="display:none;align-items:center;gap:10px;margin-bottom:16px;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:3px">\
-      <img id="site-header-logo" width="28" height="28" style="border-radius:3px" onerror="this.style.display=\'none\'">\
-      <span id="site-header-name" style="font-size:18px;font-weight:700"></span>\
-      <div id="site-header-stats" style="display:flex;gap:24px;margin-left:48px;flex:1;align-items:center;justify-content:space-around"></div>\
+    <div id="site-header-banner" class="stats-banner" style="display:none">\
+      <img id="site-header-logo" width="24" height="24" style="border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'">\
+      <span id="site-header-name" style="font-size:16px;font-weight:700;flex-shrink:0"></span>\
+      <div class="stat-sep"></div>\
+      <div id="site-header-stats" style="display:flex;gap:24px;flex:1;align-items:center;justify-content:space-around"></div>\
     </div>\
-    <div id="pages-stats-bar" class="stats-bar">\
-      <div class="stat-card"><div class="label">Pages</div><div class="value">' + pages.length + '</div></div>\
-      <div class="stat-card"><div class="label">Positions</div><div class="value">' + fmt(totalPos) + '</div><div class="sub">' + fmt(totalSold) + ' sold</div></div>\
-      <div class="stat-card"><div class="label">Traffic</div><div class="value">' + fmt(totalTraffic) + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green">' + fmtC(totalRev) + '</div></div>\
+    <div id="pages-stats-bar" class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + pages.length + '</div><div class="stat-lbl">Pages</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalPos) + '</div><div class="stat-lbl">' + fmt(totalSold) + ' sold</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(totalRev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
     </div>\
     <div class="filters">\
       <input type="text" placeholder="Search..." id="page-search" oninput="filterPages()">\
@@ -499,7 +529,7 @@ function updateSiteHeader() {
       if (pgPd) { sPos += pgPd.positions.length; sSold += getPageSold(pg.url); }
     });
 
-    var statItem = function(val, label, color) { return '<div style="text-align:center"><div style="font-size:16px;font-weight:700;' + (color ? 'color:'+color : '') + '">' + val + '</div><div style="font-size:12px;color:var(--text-muted)">' + label + '</div></div>'; };
+    var statItem = function(val, label, color) { return '<div class="stat-item"><div class="stat-val' + (color ? '' : '') + '" style="' + (color ? 'color:'+color : '') + '">' + val + '</div><div class="stat-lbl">' + label + '</div></div>'; };
     document.getElementById('site-header-stats').innerHTML =
       statItem(sPages, 'pages', '') +
       statItem(fmt(sPos), 'positions', '') +
@@ -607,11 +637,14 @@ function renderOperatorsListView(ct) {
   var monthLabel = isFullYear() ? 'Year 2026' : MONTH_LABELS[selectedMonth];
 
   ct.innerHTML = '\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Operators</div><div class="value">' + opStats.length + '</div></div>\
-      <div class="stat-card"><div class="label">Total positions</div><div class="value">' + fmt(opStats.reduce(function(s, o) { return s + o.totalCount; }, 0)) + '</div></div>\
-      <div class="stat-card"><div class="label">Sold</div><div class="value green">' + fmt(opStats.reduce(function(s, o) { return s + o.soldCount; }, 0)) + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green">' + fmtC(opStats.reduce(function(s, o) { return s + o.totalRevenue; }, 0)) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + opStats.length + '</div><div class="stat-lbl">Operators</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(opStats.reduce(function(s, o) { return s + o.totalCount; }, 0)) + '</div><div class="stat-lbl">Positions</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmt(opStats.reduce(function(s, o) { return s + o.soldCount; }, 0)) + '</div><div class="stat-lbl">Sold</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(opStats.reduce(function(s, o) { return s + o.totalRevenue; }, 0)) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
     </div>\
     <div class="filters"><input type="text" placeholder="Search for an operator..." id="op-list-search" oninput="filterOpList()"></div>\
     <table id="op-list-table"><thead><tr>\
@@ -695,9 +728,10 @@ function renderAvailableView(ct) {
   var monthLabel = isFullYear() ? 'Year 2026' : MONTH_LABELS[selectedMonth];
 
   ct.innerHTML = '\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Available positions</div><div class="value">' + positions.length + '</div></div>\
-      <div class="stat-card"><div class="label">Total est. eFTD</div><div class="value cyan">' + fmt(positions.reduce(function(s, p) { return s + p.eftd; }, 0)) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + positions.length + '</div><div class="stat-lbl">Available positions</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(positions.reduce(function(s, p) { return s + p.eftd; }, 0)) + '</div><div class="stat-lbl">Total est. eFTD</div></div>\
     </div>\
     <div class="filters"><input type="text" placeholder="Search..." id="avail-search" oninput="filterAvailable()"></div>\
     <table id="avail-table"><thead><tr>\
@@ -761,10 +795,12 @@ function renderSoldView(ct) {
   var totalRev = sold.reduce(function(s, p) { return s + p.price; }, 0);
 
   ct.innerHTML = '\
-    <div class="stats-bar">\
-      <div class="stat-card"><div class="label">Sold positions</div><div class="value">' + sold.length + '</div></div>\
-      <div class="stat-card"><div class="label">Operators</div><div class="value">' + operators.length + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue ' + monthLabel + '</div><div class="value green">' + fmtC(totalRev) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + sold.length + '</div><div class="stat-lbl">Sold positions</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + operators.length + '</div><div class="stat-lbl">Operators</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(totalRev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
     </div>\
     <div class="filters">\
       <input type="text" placeholder="Search..." id="sold-search" oninput="filterSold()">\
@@ -810,20 +846,50 @@ var amSelectedMonth = null; // separate month selector for AM screen
 var amViewHistory = [];
 var amCurrentView = 'am-list'; // am-list | am-detail | deal-detail
 
+var amCurrentTab = 'am-main'; // am-main | proposals
+
 function showAMScreen() {
-  document.getElementById('market-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'none';
+  hideAllScreens();
   document.getElementById('am-screen').style.display = 'block';
   amSelectedMonth = selectedMonth;
   amViewHistory = [];
   amCurrentView = 'am-list';
+  amCurrentTab = 'am-main';
   buildAMMonthSelector();
-  renderAMCurrentView();
+  switchAMTab('am-main');
 }
 
 function hideAMScreen() {
-  document.getElementById('am-screen').style.display = 'none';
-  document.getElementById('market-screen').style.display = 'block';
+  hideAllScreens();
+  document.getElementById('home-screen').style.display = 'block';
+}
+
+function switchAMTab(tab) {
+  amCurrentTab = tab;
+  var amContent = document.getElementById('am-content');
+  var propContent = document.getElementById('am-proposals-content');
+  var actionsArea = document.getElementById('am-topbar-actions');
+  // Update tab buttons
+  document.querySelectorAll('#am-tabs button').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.view === tab);
+  });
+  if (tab === 'proposals') {
+    amContent.style.display = 'none';
+    propContent.style.display = 'block';
+    // Show "+ New Proposal" button, hide month selector
+    actionsArea.innerHTML = '<button onclick="proposalNavigate(\'create\')" style="padding:6px 14px;border-radius:var(--radius);border:none;background:var(--gradient-primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(45,127,249,.2)">+ New Proposal</button>';
+    // Render proposals into the AM proposals content area
+    proposalCurrentView = 'list';
+    proposalViewHistory = [];
+    renderProposalCurrentViewInto(propContent);
+  } else {
+    amContent.style.display = 'block';
+    propContent.style.display = 'none';
+    // Restore month selector
+    actionsArea.innerHTML = '<div class="month-sel"><select id="am-month-select" onchange="onAMMonthChange()"></select></div>';
+    buildAMMonthSelector();
+    renderAMCurrentView();
+  }
 }
 
 function buildAMMonthSelector() {
@@ -988,7 +1054,7 @@ function renderAMListView(ct) {
   ct.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
     '<h2 style="font-size:18px;font-weight:700">Account Managers \u2014 All Markets</h2>' +
     '<div style="display:flex;gap:8px">' +
-      '<button class="btn-sm" onclick="showAddOperatorToDBModal()">+ Add Operator</button>' +
+      '<button class="btn-sm btn-primary" onclick="showAddOperatorToDBModal()">+ Add Operator</button>' +
     '</div>' +
   '</div>' +
     '<div class="am-grid">' +
@@ -1171,10 +1237,12 @@ function renderAMDetailView(ct, amName) {
     <div class="page-header">\
       <h2 style="font-size:18px;font-weight:700">' + esc(amName) + '</h2>\
     </div>\
-    <div class="stat-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">\
-      <div class="stat-card"><div class="label">Operators</div><div class="value">' + data.operators.length + '</div></div>\
-      <div class="stat-card"><div class="label">Active FF deals</div><div class="value">' + activeCount + '</div></div>\
-      <div class="stat-card"><div class="label">Fix Fees (' + monthLabel + ')</div><div class="value green">' + fmtC(totalFees) + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + data.operators.length + '</div><div class="stat-lbl">Operators</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + activeCount + '</div><div class="stat-lbl">Active FF deals</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(totalFees) + '</div><div class="stat-lbl">Fix Fees (' + monthLabel + ')</div></div>\
     </div>\
     <div style="margin-bottom:20px"><canvas id="am-revenue-chart" height="80"></canvas></div>\
     <div style="display:flex;gap:8px;margin-bottom:12px">\
@@ -1385,15 +1453,22 @@ function renderDealDetailView(ct, dealData) {
         ' + (dealMarket ? '<span class="badge">' + getFlag(dealMarket) + ' ' + esc(dealMarket) + '</span>' : '') + '\
       </div>\
     </div>\
-    <div class="stat-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">\
-      <div class="stat-card"><div class="label">Fix Fees (' + monthLabel + ')</div><div class="value green">' + fmtC(currentFees) + '</div></div>\
-      <div class="stat-card"><div class="label">Fix Fees (Year 2026)</div><div class="value green">' + fmtC(MONTHS_2026.reduce(function(s, mm) { return s + monthlyRevenue[mm]; }, 0)) + '</div></div>\
-      <div class="stat-card"><div class="label">Sold Positions</div><div class="value">' + currentSoldCount + '</div></div>\
-      <div class="stat-card"><div class="label">Free Positions</div><div class="value">' + freePositions.length + '</div></div>\
-      <div class="stat-card"><div class="label">Traffic</div><div class="value cyan">' + fmt(totalTraffic) + '</div></div>\
-      <div class="stat-card"><div class="label">eFTDs</div><div class="value cyan">' + fmt(totalEFTD) + '</div></div>\
-      <div class="stat-card"><div class="label">Deal Start</div><div class="value">' + (dealStart ? MONTH_LABELS[dealStart].split(' ')[0] : '-') + '</div></div>\
-      <div class="stat-card"><div class="label">Deal End</div><div class="value">' + (dealEnd ? MONTH_LABELS[dealEnd].split(' ')[0] : '-') + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(currentFees) + '</div><div class="stat-lbl">Fix Fees (' + monthLabel + ')</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val green">' + fmtC(MONTHS_2026.reduce(function(s, mm) { return s + monthlyRevenue[mm]; }, 0)) + '</div><div class="stat-lbl">FF Year 2026</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + currentSoldCount + '</div><div class="stat-lbl">Sold Positions</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + freePositions.length + '</div><div class="stat-lbl">Free Positions</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(totalTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(totalEFTD) + '</div><div class="stat-lbl">eFTDs</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + (dealStart ? MONTH_LABELS[dealStart].split(' ')[0] : '-') + '</div><div class="stat-lbl">Deal Start</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + (dealEnd ? MONTH_LABELS[dealEnd].split(' ')[0] : '-') + '</div><div class="stat-lbl">Deal End</div></div>\
     </div>\
     <div style="margin-bottom:24px">\
       <h3 style="font-size:14px;font-weight:700;margin-bottom:8px">Monthly Overview</h3>\
@@ -1412,8 +1487,8 @@ function renderDealDetailView(ct, dealData) {
       '</div>\
     </div>\
     <div style="margin-bottom:16px;display:flex;gap:8px">\
-      <button class="btn" onclick="showExtendDealModal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')">\uD83D\uDCC5 Extend Deal</button>\
-      <button class="btn" onclick="showReleasePosModal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">\u2702\uFE0F Release Positions</button>\
+      <button class="btn-sm btn-primary" onclick="showExtendDealModal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')">\uD83D\uDCC5 Extend Deal</button>\
+      <button class="btn-sm" onclick="showReleasePosModal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')">\u2702\uFE0F Release Positions</button>\
     </div>\
     <div style="margin-bottom:12px">\
       <select id="deal-filter-site" onchange="filterDealTables()" style="padding:6px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
@@ -1522,8 +1597,8 @@ function filterDealTables() {
 }
 
 function showDealArticleDetail(pageUrl, market, sourceRowId) {
-  // Remove any existing article detail
-  var existing = document.getElementById('deal-article-detail');
+  // Remove any existing modal
+  var existing = document.getElementById('deal-article-modal');
   if (existing) existing.remove();
 
   // Get page data from the correct market WITHOUT switching the main view
@@ -1580,50 +1655,41 @@ function showDealArticleDetail(pageUrl, market, sourceRowId) {
     return md.sold;
   }).length;
 
-  var detailDiv = document.createElement('div');
-  detailDiv.id = 'deal-article-detail';
-  detailDiv.style.cssText = 'margin-top:30px;padding:20px;border:1px solid var(--border);border-radius:6px;background:var(--surface)';
-  detailDiv.innerHTML = '\
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">\
-      <h3 style="font-size:16px;font-weight:700">' + esc(article) + '</h3>\
-      <div style="display:flex;gap:8px">\
-        <button class="btn-sm" onclick="enterMarketAndShowPage(\'' + esc(market).replace(/'/g, "\\'") + '\',\'' + esc(pageUrl).replace(/'/g, "\\'") + '\')" style="font-size:12px">\uD83D\uDD17 View in Rankings</button>\
-        <button class="btn-sm" onclick="scrollBackToRow(\'' + sourceRowId + '\')" style="font-size:12px">\u2191 Back to list</button>\
+  var overlay = document.createElement('div');
+  overlay.id = 'deal-article-modal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = '\
+    <div style="background:var(--surface);border-radius:var(--radius-lg);width:90%;max-width:720px;max-height:85vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);position:relative">\
+      <button onclick="document.getElementById(\'deal-article-modal\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">&times;</button>\
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">\
+        ' + (getSiteLogo(siteName) ? '<img src="' + getSiteLogo(siteName) + '" width="24" height="24" style="border-radius:3px;flex-shrink:0" onerror="this.style.display=\'none\'">' : '') + '\
+        <h3 style="font-size:16px;font-weight:700;margin:0">' + esc(article) + '</h3>\
       </div>\
-    </div>\
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">' + esc(siteName) + ' \u00B7 <a href="' + esc(pageUrl) + '" target="_blank" style="color:var(--text-muted)">' + esc(pageUrl.replace(/^https?:\/\//, '').substring(0, 80)) + '</a></div>\
-    <div class="stat-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">\
-      <div class="stat-card"><div class="label">Positions</div><div class="value">' + positions.length + '</div></div>\
-      <div class="stat-card"><div class="label">Sold</div><div class="value green">' + soldCount + '</div></div>\
-      <div class="stat-card"><div class="label">Revenue (' + monthLabel + ')</div><div class="value green">' + fmtC(totalRevenue) + '</div></div>\
-      <div class="stat-card"><div class="label">Traffic</div><div class="value cyan">' + fmt(pgTraffic) + '</div></div>\
-      <div class="stat-card"><div class="label">eFTDs</div><div class="value cyan">' + fmt(Math.round(totalEFTD)) + '</div></div>\
-    </div>\
-    <table class="data-table">\
-      <thead><tr><th>Ranking</th><th>Operator</th><th>Status</th><th>Price</th><th>eFTDs</th></tr></thead>\
-      <tbody>' + posHtml + '</tbody>\
-    </table>';
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">' + esc(siteName) + ' · <a href="' + esc(pageUrl) + '" target="_blank" style="color:var(--text-muted)">' + esc(pageUrl.replace(/^https?:\/\//, '').substring(0, 80)) + '</a></div>\
+      <div class="stats-banner">\
+        <div class="stat-item"><div class="stat-val">' + positions.length + '</div><div class="stat-lbl">Positions</div></div>\
+        <div class="stat-sep"></div>\
+        <div class="stat-item"><div class="stat-val green">' + soldCount + '</div><div class="stat-lbl">Sold</div></div>\
+        <div class="stat-sep"></div>\
+        <div class="stat-item"><div class="stat-val green">' + fmtC(totalRevenue) + '</div><div class="stat-lbl">Revenue (' + monthLabel + ')</div></div>\
+        <div class="stat-sep"></div>\
+        <div class="stat-item"><div class="stat-val cyan">' + fmt(pgTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+        <div class="stat-sep"></div>\
+        <div class="stat-item"><div class="stat-val cyan">' + fmt(Math.round(totalEFTD)) + '</div><div class="stat-lbl">eFTDs</div></div>\
+      </div>\
+      <table class="data-table" style="margin-bottom:16px">\
+        <thead><tr><th>Ranking</th><th>Operator</th><th>Status</th><th>Price</th><th>eFTDs</th></tr></thead>\
+        <tbody>' + posHtml + '</tbody>\
+      </table>\
+      <div style="display:flex;gap:8px;justify-content:flex-end">\
+        <button class="btn-sm" onclick="enterMarketAndShowPage(\'' + esc(market).replace(/'/g, "\\'") + '\',\'' + esc(pageUrl).replace(/'/g, "\\'") + '\')">\uD83D\uDD17 View in Rankings</button>\
+        <button class="btn-sm" onclick="document.getElementById(\'deal-article-modal\').remove()">Close</button>\
+      </div>\
+    </div>';
 
-  // Append at the bottom of the AM content area
-  var ct = document.getElementById('am-content');
-  ct.appendChild(detailDiv);
-
-  // Scroll to the detail
-  detailDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function scrollBackToRow(rowId) {
-  var row = document.getElementById(rowId);
-  if (row) {
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Highlight briefly
-    row.style.background = 'var(--primary)';
-    row.style.color = '#fff';
-    setTimeout(function() { row.style.background = ''; row.style.color = ''; }, 1500);
-  }
-  // Remove the detail section
-  var detail = document.getElementById('deal-article-detail');
-  if (detail) detail.remove();
+  document.body.appendChild(overlay);
 }
 
 // ==================== AM / OPERATOR MANAGEMENT MODALS ====================
@@ -2018,7 +2084,7 @@ function showExtendDealModal(opName, dealMarket) {
       (lastSoldMonth ? MONTH_LABELS[lastSoldMonth] : 'the current month') + ' to all months up to and including the selected month.</p>' +
     '<div class="modal-actions">' +
       '<button class="btn-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
-      '<button class="btn-primary" onclick="extendDeal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')">Extend Deal</button>' +
+      '<button class="btn-sm btn-primary" onclick="extendDeal(\'' + esc(opName).replace(/'/g, "\\'") + '\',\'' + esc(dealMarket || '').replace(/'/g, "\\'") + '\')">Extend Deal</button>' +
     '</div>' +
   '</div>';
 
@@ -2152,7 +2218,7 @@ function showReleasePosModal(opName, dealMarket) {
     monthsHtml +
     '<div class="modal-actions">' +
       '<button class="btn-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
-      '<button class="btn-primary" style="background:var(--red)" onclick="releasePositions(\'' + esc(opName).replace(/'/g, "\\'") + '\')">Release Selected</button>' +
+      '<button class="btn-sm btn-danger" onclick="releasePositions(\'' + esc(opName).replace(/'/g, "\\'") + '\')">Release Selected</button>' +
     '</div>' +
   '</div>';
 
@@ -2407,9 +2473,7 @@ function saveScanConfig() {
 // ==================== OPERATORS DB SCREEN ====================
 
 function showOperatorsScreen() {
-  document.getElementById('market-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'none';
-  document.getElementById('am-screen').style.display = 'none';
+  hideAllScreens();
   document.getElementById('operators-db-screen').style.display = 'block';
   opdbCurrentView = 'market-list';
   opdbCurrentMarket = null;
@@ -2418,8 +2482,8 @@ function showOperatorsScreen() {
 }
 
 function hideOperatorsScreen() {
-  document.getElementById('operators-db-screen').style.display = 'none';
-  document.getElementById('market-screen').style.display = 'block';
+  hideAllScreens();
+  document.getElementById('home-screen').style.display = 'block';
 }
 
 var opdbCurrentView = 'market-list'; // market-list | market-detail
@@ -2471,10 +2535,12 @@ function renderOpDBMarketList(ct) {
         <button class="btn-sm" onclick="showOperatorDBImport()">Import CSV</button>\
       </div>\
     </div>\
-    <div class="stat-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">\
-      <div class="stat-card"><div class="label">Total Operators</div><div class="value">' + totalOps + '</div></div>\
-      <div class="stat-card"><div class="label">Markets</div><div class="value">' + allMkts.length + '</div></div>\
-      <div class="stat-card"><div class="label">With AM</div><div class="value">' + totalWithAM + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + totalOps + '</div><div class="stat-lbl">Total Operators</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + allMkts.length + '</div><div class="stat-lbl">Markets</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + totalWithAM + '</div><div class="stat-lbl">With AM</div></div>\
     </div>\
     <div class="am-grid">' +
     allMkts.map(function(market) {
@@ -2515,10 +2581,12 @@ function renderOpDBMarketDetail(ct, market) {
     <div class="page-header">\
       <h2 style="font-size:18px;font-weight:700">' + getFlag(market) + ' ' + esc(market) + '</h2>\
     </div>\
-    <div class="stat-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">\
-      <div class="stat-card"><div class="label">Operators</div><div class="value">' + opList.length + '</div></div>\
-      <div class="stat-card"><div class="label">With AM</div><div class="value">' + withAM + '</div></div>\
-      <div class="stat-card"><div class="label">With URL</div><div class="value">' + withURL + '</div></div>\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val">' + opList.length + '</div><div class="stat-lbl">Operators</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + withAM + '</div><div class="stat-lbl">With AM</div></div>\
+      <div class="stat-sep"></div>\
+      <div class="stat-item"><div class="stat-val">' + withURL + '</div><div class="stat-lbl">With URL</div></div>\
     </div>\
     <div style="display:flex;gap:8px;margin-bottom:12px">\
       <input type="text" id="opdb-filter-name" placeholder="Search operator..." oninput="filterOpDBMarketTable()" style="padding:6px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px;flex:1;max-width:300px">\
