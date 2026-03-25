@@ -1303,7 +1303,13 @@ async function runAutoScan(manualType, filterMarket) {
           return null;
         };
 
+        // Build future months list (after current month)
+        const allMonths = ['01/26','02/26','03/26','04/26','05/26','06/26','07/26','08/26','09/26','10/26','11/26','12/26'];
+        const monthIdx = allMonths.indexOf(month);
+        const futureMonths = monthIdx >= 0 ? allMonths.slice(monthIdx + 1) : [];
+
         // Update positions for non-sold slots — only if operator is in DB
+        // Also propagate to future months
         positions.forEach((scraped, i) => {
           if (i >= numberedPositions.length) {
             const newPos = { name: String(namedPositions.length + numberedPositions.length + 1), months: {} };
@@ -1313,15 +1319,15 @@ async function runAutoScan(manualType, filterMarket) {
           if (!pos.months) pos.months = {};
           const md = pos.months[month] || {};
           const resolved = resolveFromDB(scraped.name);
+
+          // Current month
           if (!md.sold) {
             if (resolved) {
               pos.months[month] = { operator: resolved, sold: false, price: 0 };
             } else {
-              // Unknown operator — leave empty, record alert
               pageAlerts.push('Position ' + (i + 1) + ': unknown operator "' + scraped.name + '" not in DB');
             }
           } else if (md.sold && md.operator) {
-            // Check for mismatch on sold positions (more detailed per-position alert)
             if (resolved && resolved.toLowerCase().replace(/[^a-z0-9]/g, '') !== md.operator.toLowerCase().replace(/[^a-z0-9]/g, '')) {
               if (!scrapeAlerts[market]) scrapeAlerts[market] = {};
               if (!scrapeAlerts[market][pageUrl]) scrapeAlerts[market][pageUrl] = {};
@@ -1332,6 +1338,27 @@ async function runAutoScan(manualType, filterMarket) {
               };
             }
           }
+
+          // Propagate to future months
+          futureMonths.forEach(fm => {
+            const fmd = pos.months[fm] || { operator: '', sold: false, price: 0 };
+            if (fmd.sold && fmd.operator) {
+              // Future month sold — check mismatch
+              if (resolved && resolved.toLowerCase().replace(/[^a-z0-9]/g, '') !== fmd.operator.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+                if (!scrapeAlerts[market]) scrapeAlerts[market] = {};
+                if (!scrapeAlerts[market][pageUrl]) scrapeAlerts[market][pageUrl] = {};
+                scrapeAlerts[market][pageUrl][(namedPositions.length + i) + '_' + fm] = {
+                  type: 'sold_mismatch',
+                  expected: fmd.operator,
+                  found: scraped.name + (resolved !== scraped.name ? ' → ' + resolved : ''),
+                  month: fm
+                };
+              }
+            } else if (resolved) {
+              // Future month free — assign scanned operator
+              pos.months[fm] = { operator: resolved, sold: false, price: 0 };
+            }
+          });
         });
 
         // Remove unsold banner/link/ootm

@@ -126,6 +126,10 @@ function processScrapeResults(pageUrl, scrapedOps) {
     return false;
   }
 
+  // Get future months (after current month)
+  var monthIdx = MONTHS_2026.indexOf(month);
+  var futureMonths = monthIdx >= 0 ? MONTHS_2026.slice(monthIdx + 1) : [];
+
   scrapedOps.forEach(function(scraped, scrIdx) {
     var posIdx = numberedStartIdx + scrIdx;
     if (posIdx >= pd.positions.length) return;
@@ -137,7 +141,7 @@ function processScrapeResults(pageUrl, scrapedOps) {
     var inDB = isInOperatorDB(resolvedName);
 
     if (md.sold && md.operator) {
-      // Position filled & sold
+      // Position filled & sold — check mismatch
       if (!operatorsMatch(md.operator, resolvedName)) {
         scrapeAlerts[currentMarket][pageUrl][posIdx] = {
           type: 'sold_mismatch',
@@ -145,33 +149,42 @@ function processScrapeResults(pageUrl, scrapedOps) {
           found: scraped.name + (resolvedName !== scraped.name ? ' \u2192 ' + resolvedName : '')
         };
       }
-    } else if (md.operator && !md.sold) {
-      // Position filled & free
-      if (inDB) {
-        if (!isFullYear()) {
-          pos.months[month] = { operator: resolvedName, sold: false, price: 0 };
-        }
-      } else {
-        scrapeAlerts[currentMarket][pageUrl][posIdx] = {
-          type: 'unknown_operator',
-          found: scraped.name + (resolvedName !== scraped.name ? ' \u2192 ' + resolvedName : ''),
-          reason: 'Operator not in DB'
-        };
+    } else if (inDB) {
+      // Position free (or has operator but not sold) — assign if in DB
+      if (!isFullYear()) {
+        pos.months[month] = { operator: resolvedName, sold: false, price: 0 };
       }
     } else {
-      // Position empty
-      if (inDB) {
-        if (!isFullYear()) {
-          pos.months[month] = { operator: resolvedName, sold: false, price: 0 };
+      // Unknown operator — leave empty, record alert
+      scrapeAlerts[currentMarket][pageUrl][posIdx] = {
+        type: 'unknown_operator',
+        found: scraped.name + (resolvedName !== scraped.name ? ' \u2192 ' + resolvedName : ''),
+        reason: 'Operator not in DB — position left empty'
+      };
+    }
+
+    // Propagate to future months
+    if (!isFullYear()) {
+      futureMonths.forEach(function(fm) {
+        if (!pos.months) pos.months = {};
+        var fmd = pos.months[fm] || { operator: '', sold: false, price: 0 };
+        if (fmd.sold && fmd.operator) {
+          // Future month is sold — check mismatch with scanned operator
+          if (inDB && !operatorsMatch(fmd.operator, resolvedName)) {
+            var alertKey = posIdx + '_' + fm;
+            scrapeAlerts[currentMarket][pageUrl][alertKey] = {
+              type: 'sold_mismatch',
+              expected: fmd.operator,
+              found: scraped.name + (resolvedName !== scraped.name ? ' \u2192 ' + resolvedName : ''),
+              month: fm
+            };
+          }
+        } else if (inDB) {
+          // Future month is free — assign scanned operator
+          pos.months[fm] = { operator: resolvedName, sold: false, price: 0 };
         }
-      } else {
-        // Leave position empty, alert
-        scrapeAlerts[currentMarket][pageUrl][posIdx] = {
-          type: 'unknown_operator',
-          found: scraped.name + (resolvedName !== scraped.name ? ' \u2192 ' + resolvedName : ''),
-          reason: 'Operator not in DB — position left empty'
-        };
-      }
+        // If unknown operator: don't touch future months either
+      });
     }
   });
 
