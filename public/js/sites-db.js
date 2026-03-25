@@ -68,10 +68,11 @@ function getSitesAggregatedData() {
       }
       sites[siteName].markets.add(market);
 
-      // Get traffic (GSC or CSV)
+      // Get traffic (GSC or CSV) — support new format { current, previous, monthly }
       var traffic = 0;
-      if (window.gscTraffic && window.gscTraffic[market] && window.gscTraffic[market][page.url]) {
-        traffic = window.gscTraffic[market][page.url].clicks || 0;
+      var gscEntry = window.gscTraffic && window.gscTraffic[market] && window.gscTraffic[market][page.url];
+      if (gscEntry) {
+        traffic = gscEntry.current !== undefined ? gscEntry.current : (gscEntry.clicks || 0);
       } else {
         traffic = page.traffic || 0;
       }
@@ -457,70 +458,76 @@ function doAddSite() {
 // ==================== ADD PAGE TO SITE MODAL ====================
 
 function showAddPageToSiteModal(siteName) {
-  var existing = document.getElementById('sdb-modal');
+  var existing = document.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
-  // Build market options
-  var markets = Object.keys(allMarkets).sort();
+  // Build market options from positionData + allMarkets
+  var mkts = {};
+  Object.keys(positionData || {}).forEach(function(m) { mkts[m] = true; });
+  Object.keys(allMarkets || {}).forEach(function(m) { mkts[m] = true; });
+  var markets = Object.keys(mkts).sort();
   var marketOpts = markets.map(function(m) {
     return '<option value="' + esc(m) + '">' + m + '</option>';
   }).join('');
 
-  var modal = document.createElement('div');
-  modal.id = 'sdb-modal';
-  modal.className = 'modal';
-  modal.style.display = 'flex';
-  modal.innerHTML = '\
-    <div class="modal-content" style="max-width:500px">\
-      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">\
-        <h3 style="font-size:16px;font-weight:700">Add Page to ' + esc(siteName) + '</h3>\
-        <button onclick="closeSDBModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">&times;</button>\
-      </div>\
-      <div style="display:flex;flex-direction:column;gap:12px">\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Market</label>\
-          <select id="sdb-page-market" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-            <option value="">Select market...</option>' + marketOpts + '\
-            <option value="_custom">Other (type below)</option>\
-          </select>\
-        </div>\
-        <div id="sdb-custom-market-row" style="display:none">\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Custom Market</label>\
-          <input type="text" id="sdb-page-custom-market" placeholder="e.g. Global" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-        </div>\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Page URL</label>\
-          <input type="text" id="sdb-page-url" placeholder="https://..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-        </div>\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Article / Page Title</label>\
-          <input type="text" id="sdb-page-article" placeholder="e.g. Best Betting Apps" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-        </div>\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Type</label>\
-          <select id="sdb-page-type" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-            <option value="business">Business (non-ranking)</option>\
-            <option value="ranking">Ranking</option>\
-          </select>\
-        </div>\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Topic (optional)</label>\
-          <input type="text" id="sdb-page-topic" placeholder="e.g. Sports Betting" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-        </div>\
-        <div>\
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Monthly Traffic (optional)</label>\
-          <input type="number" id="sdb-page-traffic" placeholder="0" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text);font-size:13px">\
-        </div>\
-        <button onclick="doAddPageToSite(\'' + esc(siteName).replace(/'/g, "\\'") + '\')" style="padding:10px;background:var(--primary);color:#fff;border:none;border-radius:3px;font-size:14px;cursor:pointer;font-weight:600">Add Page</button>\
-      </div>\
-    </div>';
-  document.body.appendChild(modal);
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeSDBModal(); });
+  // Build topic options from existing pages
+  var topicSet = {};
+  Object.values(allMarkets || {}).forEach(function(mk) {
+    (mk.pages || []).forEach(function(p) { if (p.topic) topicSet[p.topic] = true; });
+  });
+  var topics = Object.keys(topicSet).sort();
+  var topicOpts = topics.map(function(t) { return '<option>' + esc(t) + '</option>'; }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = '<div class="modal">' +
+    '<h3>Add page to ' + esc(siteName) + '</h3>' +
+    '<label>Market</label>' +
+    '<select id="sdb-page-market"><option value="">Select market...</option>' + marketOpts + '<option value="_custom">+ Other</option></select>' +
+    '<div id="sdb-custom-market-row" style="display:none;margin-top:4px"><input type="text" id="sdb-page-custom-market" placeholder="Custom market name"></div>' +
+    '<label>Page URL</label>' +
+    '<input type="url" id="sdb-page-url" placeholder="https://...">' +
+    '<label>Article name</label>' +
+    '<input type="text" id="sdb-page-article" placeholder="e.g. Best Betting Apps">' +
+    '<label>Topics</label>' +
+    '<div id="sdb-topic-picker" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);min-height:36px">' +
+      topics.map(function(t) { return '<label style="display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:var(--bg-main);border:1px solid var(--border);white-space:nowrap"><input type="checkbox" class="sdb-topic-chk" value="' + esc(t) + '" style="width:13px;height:13px;margin:0">' + esc(t) + '</label>'; }).join('') +
+      '<button type="button" onclick="addNewTopicToPickerSites()" style="padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:none;border:1px dashed var(--border);color:var(--primary)">+ New</button>' +
+    '</div>' +
+    '<div style="margin-top:12px;display:flex;align-items:baseline;gap:8px"><input type="checkbox" id="sdb-page-rankings" style="width:16px;height:16px;margin:0;cursor:pointer;position:relative;top:2px"><label for="sdb-page-rankings" style="font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">Add to rankings</label><span style="font-size:11px;color:var(--text-muted)">— also appears in rankings with positions</span></div>' +
+    '<div id="sdb-page-nbpos-row" style="display:none;margin-top:8px"><label>Number of positions</label><input type="number" id="sdb-page-nbpos" value="10" min="1" max="30"></div>' +
+    '<input type="hidden" id="sdb-page-type" value="business">' +
+    '<div class="modal-actions">' +
+      '<button class="btn-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
+      '<button class="btn-primary" onclick="doAddPageToSite(\'' + esc(siteName).replace(/'/g, "\\'") + '\')">Add</button>' +
+    '</div>' +
+  '</div>';
+
+  document.body.appendChild(overlay);
 
   // Show/hide custom market field
   document.getElementById('sdb-page-market').addEventListener('change', function() {
     document.getElementById('sdb-custom-market-row').style.display = this.value === '_custom' ? 'block' : 'none';
   });
+  // Show/hide nb positions when "Add to rankings" is toggled
+  document.getElementById('sdb-page-rankings').addEventListener('change', function() {
+    document.getElementById('sdb-page-nbpos-row').style.display = this.checked ? 'block' : 'none';
+    document.getElementById('sdb-page-type').value = this.checked ? 'ranking' : 'business';
+  });
+}
+
+function addNewTopicToPickerSites() {
+  var v = prompt('New topic name:');
+  if (!v || !v.trim()) return;
+  v = v.trim();
+  var picker = document.getElementById('sdb-topic-picker');
+  var btn = picker.querySelector('button');
+  var lbl = document.createElement('label');
+  lbl.style.cssText = 'display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:var(--bg-main);border:1px solid var(--border);white-space:nowrap';
+  lbl.innerHTML = '<input type="checkbox" class="sdb-topic-chk" value="' + v.replace(/"/g, '&quot;') + '" checked style="width:13px;height:13px;margin:0">' + v.replace(/</g, '&lt;');
+  picker.insertBefore(lbl, btn);
 }
 
 function doAddPageToSite(siteName) {
@@ -529,8 +536,12 @@ function doAddPageToSite(siteName) {
   var url = (document.getElementById('sdb-page-url').value || '').trim();
   var article = (document.getElementById('sdb-page-article').value || '').trim();
   var type = document.getElementById('sdb-page-type').value;
-  var topic = (document.getElementById('sdb-page-topic').value || '').trim();
-  var traffic = parseInt(document.getElementById('sdb-page-traffic').value) || 0;
+  var topicChks = document.querySelectorAll('.sdb-topic-chk:checked');
+  var topicArr = []; topicChks.forEach(function(c) { topicArr.push(c.value); });
+  var topic = topicArr.join(', ');
+  var traffic = 0;
+  var addToRankings = document.getElementById('sdb-page-rankings').checked;
+  var nbPos = parseInt(document.getElementById('sdb-page-nbpos').value) || 10;
 
   if (!market) { showToast('Please select a market', 'error'); return; }
   if (!url) { showToast('Page URL is required', 'error'); return; }
@@ -555,9 +566,38 @@ function doAddPageToSite(siteName) {
     traffic: traffic
   });
 
+  // Add to rankings if checked
+  if (addToRankings) {
+    if (!positionData[market]) positionData[market] = {};
+    if (!positionData[market][url]) {
+      positionData[market][url] = { positions: [], conversion: 0 };
+      for (var i = 1; i <= nbPos; i++) {
+        var pos = { name: String(i), months: {} };
+        MONTHS_2026.forEach(function(m) { pos.months[m] = { operator: '', sold: false, price: 0 }; });
+        positionData[market][url].positions.push(pos);
+      }
+    }
+    // Also add to allMarkets if not already there
+    if (allMarkets[market]) {
+      var exists = allMarkets[market].pages.some(function(p) { return p.url === url; });
+      if (!exists) {
+        var pg = {
+          article: article, siteName: siteName, url: url, positions: [],
+          nbPos: nbPos, topic: topic, tags: '', area: '',
+          traffic: traffic, trafficFeb: traffic, trafficSep: 0, trafficJuly: 0, fees: {},
+          inRankings: true
+        };
+        for (var j = 1; j <= nbPos; j++) pg.positions.push(String(j));
+        allMarkets[market].pages.push(pg);
+      }
+    }
+  }
+
   saveAll();
+  // Auto-add to traffic Google Sheet
+  addUrlToTrafficSheet(url, market);
   closeSDBModal();
-  showToast('Page added to ' + siteName, 'success');
+  showToast('Page added to ' + siteName + (addToRankings ? ' + rankings' : ''), 'success');
   renderSitesDBView();
 }
 
@@ -764,4 +804,6 @@ function getSiteMarketAsanaUrl(siteName, market) {
 function closeSDBModal() {
   var modal = document.getElementById('sdb-modal');
   if (modal) modal.remove();
+  var overlay = document.querySelector('.modal-overlay');
+  if (overlay) overlay.remove();
 }

@@ -1,6 +1,6 @@
 // ==================== HIDE ALL SCREENS HELPER ====================
 function hideAllScreens() {
-  ['home-screen','market-screen','app-screen','am-screen','operators-db-screen','proposals-screen','sites-db-screen','guidelines-screen'].forEach(function(id) {
+  ['home-screen','market-screen','app-screen','am-screen','operators-db-screen','proposals-screen','sites-db-screen','markets-screen','guidelines-screen'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -70,6 +70,7 @@ function buildTabs() {
     { id: 'operators', label: 'By Operator' },
     { id: 'available', label: 'Available' },
     { id: 'sold', label: 'Sold' },
+    { id: 'mismatches', label: 'Mismatches' },
     { id: 'scan-log', label: 'Scan Log' }
   ];
   tabs.innerHTML = views.map(function(v) {
@@ -92,19 +93,52 @@ function onMonthChange() {
 // ==================== VIEW SYSTEM ====================
 var viewHistory = [];
 
+function captureFilterState() {
+  var state = {};
+  var siteFilter = document.getElementById('site-filter');
+  var topicFilter = document.getElementById('topic-filter');
+  var scanFilter = document.getElementById('scan-filter');
+  var pageSearch = document.getElementById('page-search');
+  var siteSearch = document.getElementById('site-search');
+  var opSearch = document.getElementById('op-list-search');
+  if (siteFilter) state.siteFilter = siteFilter.value;
+  if (topicFilter) state.topicFilter = topicFilter.value;
+  if (scanFilter) state.scanFilter = scanFilter.value;
+  if (pageSearch) state.pageSearch = pageSearch.value;
+  if (siteSearch) state.siteSearch = siteSearch.value;
+  if (opSearch) state.opSearch = opSearch.value;
+  return state;
+}
+
+function restoreFilterState(state) {
+  if (!state) return;
+  setTimeout(function() {
+    if (state.siteFilter) { var el = document.getElementById('site-filter'); if (el) { el.value = state.siteFilter; } }
+    if (state.topicFilter) { var el = document.getElementById('topic-filter'); if (el) el.value = state.topicFilter; }
+    if (state.scanFilter) { var el = document.getElementById('scan-filter'); if (el) el.value = state.scanFilter; }
+    if (state.pageSearch) { var el = document.getElementById('page-search'); if (el) el.value = state.pageSearch; }
+    if (state.siteSearch) { var el = document.getElementById('site-search'); if (el) el.value = state.siteSearch; }
+    if (state.opSearch) { var el = document.getElementById('op-list-search'); if (el) el.value = state.opSearch; }
+    // Re-apply filters
+    if (typeof filterPages === 'function' && (state.siteFilter || state.topicFilter || state.scanFilter || state.pageSearch)) { filterPages(); updateSiteHeader(); }
+    if (typeof filterSites === 'function' && state.siteSearch) filterSites();
+    if (typeof filterOpList === 'function' && state.opSearch) filterOpList();
+  }, 0);
+}
+
 function goBack() {
   if (viewHistory.length > 0) {
     var prev = viewHistory.pop();
-    showView(prev.name, prev.data, true);
+    showView(prev.name, prev.data, true, prev.filters);
   } else {
     showView('dashboard', null, true);
   }
 }
 
-function showView(name, data, isBack) {
+function showView(name, data, isBack, restoreFilters) {
   // Push current view to history (unless navigating back or same view)
   if (!isBack && currentView && !(currentView === name && !data)) {
-    var historyEntry = { name: currentView };
+    var historyEntry = { name: currentView, filters: captureFilterState() };
     if (currentView === 'page-detail' && currentPageUrl) historyEntry.data = currentPageUrl;
     if (currentView === 'op-detail' && currentOperator) historyEntry.data = currentOperator;
     viewHistory.push(historyEntry);
@@ -122,6 +156,9 @@ function showView(name, data, isBack) {
   });
 
   renderCurrentView(data);
+
+  // Restore filters after render (when going back)
+  if (isBack && restoreFilters) restoreFilterState(restoreFilters);
 }
 
 function renderCurrentView(data) {
@@ -135,6 +172,7 @@ function renderCurrentView(data) {
     case 'operators': renderOperatorsListView(ct); break;
     case 'available': renderAvailableView(ct); break;
     case 'sold': renderSoldView(ct); break;
+    case 'mismatches': renderMismatchesView(ct); break;
     case 'scan-log': renderScanLogView(ct); break;
     case 'op-detail': renderOperatorDetail(ct, data || currentOperator); break;
     case 'page-detail': renderPageDetail(ct, data || currentPageUrl); break;
@@ -149,7 +187,7 @@ function renderDashboard(ct) {
   var months = getActiveMonths();
 
   // Compute stats
-  var totalPos = 0, soldPos = 0, totalRev = 0, totalTraffic = 0, totalEFTD = 0;
+  var totalPos = 0, soldPos = 0, totalRev = 0, totalTraffic = 0, totalTrafficPrev = 0, totalEFTD = 0;
   var siteRevenue = {};
   var siteTraffic = {};
   var opRevenue = {};
@@ -161,6 +199,7 @@ function renderDashboard(ct) {
 
   pages.forEach(function(pg) {
     totalTraffic += pg.traffic;
+    totalTrafficPrev += (pg.trafficPrevious || 0);
     var pgPd = pd[pg.url];
     if (!pgPd) return;
     var conv = pgPd.conversion || 0;
@@ -227,7 +266,7 @@ function renderDashboard(ct) {
       <div class="stat-sep"></div>\
       <div class="stat-item"><div class="stat-val">' + fmt(totalPos) + '</div><div class="stat-lbl">' + fmt(soldPos) + ' sold / ' + fmt(totalPos - soldPos) + ' avail.</div></div>\
       <div class="stat-sep"></div>\
-      <div class="stat-item"><div class="stat-val">' + fmt(totalTraffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-item"><div class="stat-val">' + fmt(totalTraffic) + (typeof trendBadge === 'function' ? trendBadge(totalTraffic, totalTrafficPrev) : '') + '</div><div class="stat-lbl">Traffic (30d)</div></div>\
       <div class="stat-sep"></div>\
       <div class="stat-item"><div class="stat-val green">' + fmtC(totalRev) + '</div><div class="stat-lbl">Revenue ' + monthLabel + '</div></div>\
       <div class="stat-sep"></div>\
@@ -264,19 +303,7 @@ function renderDashboard(ct) {
         '</tbody></table>\
       </div>\
     </div>\
-    <div>\
-      <h3 style="font-size:14px;margin-bottom:10px">Position mismatches (' + allMismatches.length + ')</h3>' +
-      (allMismatches.length === 0 ? '<p style="color:var(--text-muted);font-size:13px">No mismatches detected. Run scans to check positions.</p>' :
-      '<table><thead><tr><th>Page</th><th>Site</th><th>Position</th><th>Expected</th><th>Found</th></tr></thead><tbody>' +
-      allMismatches.map(function(mm) { return '<tr class="clickable" onclick="showView(\'page-detail\',\'' + esc(mm.pageUrl) + '\')">' +
-        '<td>' + esc(mm.page) + '</td>' +
-        '<td>' + esc(mm.siteName) + '</td>' +
-        '<td>#' + (mm.posIdx + 1) + '</td>' +
-        '<td>' + esc(mm.expected) + '</td>' +
-        '<td style="color:var(--red)">' + esc(mm.found) + '</td>' +
-      '</tr>'; }).join('') +
-      '</tbody></table>') +
-    '</div>';
+    ' + (allMismatches.length > 0 ? '<div style="margin-top:8px"><a href="#" onclick="showView(\'mismatches\');return false" style="font-size:13px;color:var(--red);font-weight:600">\u26A0\uFE0F ' + allMismatches.length + ' position mismatch' + (allMismatches.length > 1 ? 'es' : '') + ' detected \u2192</a></div>' : '') + '';
 
   // Draw charts
   setTimeout(function() {
@@ -388,10 +415,11 @@ function renderSitesView(ct) {
   var sites = {};
 
   pages.forEach(function(pg) {
-    if (!sites[pg.siteName]) sites[pg.siteName] = { pages: 0, positions: 0, sold: 0, traffic: 0, revenue: 0, hasAlert: false };
+    if (!sites[pg.siteName]) sites[pg.siteName] = { pages: 0, positions: 0, sold: 0, traffic: 0, trafficPrev: 0, revenue: 0, hasAlert: false };
     var s = sites[pg.siteName];
     s.pages++;
     s.traffic += pg.traffic;
+    s.trafficPrev += (pg.trafficPrevious || 0);
     s.revenue += getPageRevenue(pg.url);
     var pgPd = pd[pg.url];
     if (pgPd) {
@@ -442,7 +470,7 @@ function filterSites() {
       '<td><img src="' + getSiteLogo(name) + '" width="16" height="16" style="vertical-align:middle;margin-right:6px;border-radius:2px" onerror="this.style.display=\'none\'"><strong>' + esc(name) + '</strong>' + (s.hasAlert ? ' <span class="warn-icon" title="Scrape alerts">\u26A0\uFE0F</span>' : '') + '</td>' +
       '<td>' + s.pages + '</td><td>' + s.positions + '</td>' +
       '<td><span class="badge badge-green">' + s.sold + ' / ' + s.positions + '</span></td>' +
-      '<td class="text-cyan">' + fmt(s.traffic) + '</td>' +
+      '<td class="text-cyan">' + fmt(s.traffic) + (typeof trendBadge === 'function' ? trendBadge(s.traffic, s.trafficPrev) : '') + '</td>' +
       '<td class="text-green">' + fmtC(s.revenue) + '</td>' +
       '<td>' + (s.pages ? fmtC(Math.round(s.revenue / s.pages)) : '0 \u20AC') + '</td>' +
       '<td><button onclick="showSiteConfig(\'' + esc(name) + '\', event)" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted)" title="Configure">&#9881;</button></td>' +
@@ -580,7 +608,7 @@ function filterPages() {
       '<td>' + (pg.topic ? '<span class="badge badge-primary">' + esc(pg.topic) + '</span>' : '') + '</td>' +
       '<td>' + nPos + '</td>' +
       '<td><span class="badge ' + (sold > 0 ? 'badge-green' : 'badge-red') + '">' + sold + ' / ' + nPos + '</span></td>' +
-      '<td class="text-cyan">' + fmt(pg.traffic) + '</td>' +
+      '<td class="text-cyan">' + fmt(pg.traffic) + (typeof trendBadge === 'function' ? trendBadge(pg.traffic, pg.trafficPrevious) : '') + '</td>' +
       '<td class="text-cyan">' + fmt(eftd) + '</td>' +
       '<td class="text-green">' + fmtC(rev) + '</td>' +
     '</tr>';
@@ -2256,6 +2284,102 @@ function releasePositions(opName) {
   } else {
     showToast('No positions selected', 'info');
   }
+}
+
+// ==================== MISMATCHES VIEW ====================
+function renderMismatchesView(ct) {
+  var pages = getMarketPages();
+  var pd = getMarketPosData();
+  var allMismatches = [];
+
+  pages.forEach(function(pg) {
+    var pageAlerts = scrapeAlerts[currentMarket]?.[pg.url] || {};
+    Object.keys(pageAlerts).forEach(function(posIdx) {
+      var alert = pageAlerts[posIdx];
+      allMismatches.push({
+        page: pg.article, pageUrl: pg.url, siteName: pg.siteName,
+        posIdx: parseInt(posIdx),
+        type: alert.type || 'unknown',
+        expected: alert.expected || '',
+        found: alert.found || '',
+        reason: alert.reason || ''
+      });
+    });
+  });
+
+  // Type config for colors and labels
+  var typeConfig = {
+    sold_mismatch: { label: 'Sold mismatch', color: '#cc0000', bg: '#ffe6e6', desc: 'Position sold to an operator but scan found a different one' },
+    unknown_operator: { label: 'Unknown operator', color: '#cc6600', bg: '#fff3e6', desc: 'Scraped operator is not in the Operator Database' },
+    unknown: { label: 'Other', color: '#888', bg: '#f0f0f0', desc: 'Other mismatch' }
+  };
+
+  // Collect unique types and sites for filters
+  var typeSet = {};
+  var siteSet = {};
+  allMismatches.forEach(function(mm) {
+    typeSet[mm.type] = true;
+    siteSet[mm.siteName] = true;
+  });
+  var types = Object.keys(typeSet).sort();
+  var sites = Object.keys(siteSet).sort();
+
+  // Stats per type
+  var statsByType = {};
+  allMismatches.forEach(function(mm) {
+    if (!statsByType[mm.type]) statsByType[mm.type] = 0;
+    statsByType[mm.type]++;
+  });
+
+  ct.innerHTML = '\
+    <div class="stats-banner">\
+      <div class="stat-item"><div class="stat-val" style="color:var(--red)">' + allMismatches.length + '</div><div class="stat-lbl">Total mismatches</div></div>\
+      ' + types.map(function(t) {
+        var tc = typeConfig[t] || typeConfig.unknown;
+        return '<div class="stat-sep"></div><div class="stat-item"><div class="stat-val" style="color:' + tc.color + '">' + (statsByType[t] || 0) + '</div><div class="stat-lbl">' + tc.label + '</div></div>';
+      }).join('') + '\
+    </div>\
+    <div class="filters">\
+      <input type="text" placeholder="Search page or operator..." id="mm-search" oninput="filterMismatches()">\
+      <select id="mm-type-filter" onchange="filterMismatches()"><option value="">All types</option>' + types.map(function(t) { var tc = typeConfig[t] || typeConfig.unknown; return '<option value="' + t + '">' + tc.label + '</option>'; }).join('') + '</select>\
+      <select id="mm-site-filter" onchange="filterMismatches()"><option value="">All sites</option>' + sites.map(function(s) { return '<option>' + esc(s) + '</option>'; }).join('') + '</select>\
+    </div>\
+    <table id="mm-table"><thead><tr>\
+      <th>Type</th><th>Page</th><th>Site</th><th>Position</th><th>Expected</th><th>Found</th><th>Detail</th>\
+    </tr></thead><tbody id="mm-tbody"></tbody></table>';
+
+  window._mmData = allMismatches;
+  window._mmTypeConfig = typeConfig;
+  filterMismatches();
+}
+
+function filterMismatches() {
+  var q = (document.getElementById('mm-search')?.value || '').toLowerCase();
+  var typeF = document.getElementById('mm-type-filter')?.value || '';
+  var siteF = document.getElementById('mm-site-filter')?.value || '';
+  var tc = window._mmTypeConfig || {};
+
+  var data = (window._mmData || []).filter(function(mm) {
+    if (typeF && mm.type !== typeF) return false;
+    if (siteF && mm.siteName !== siteF) return false;
+    if (q && mm.page.toLowerCase().indexOf(q) < 0 && mm.found.toLowerCase().indexOf(q) < 0 && (mm.expected || '').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  var tbody = document.getElementById('mm-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = data.map(function(mm) {
+    var conf = tc[mm.type] || tc.unknown || { label: mm.type, color: '#888', bg: '#f0f0f0' };
+    return '<tr class="clickable" onclick="showView(\'page-detail\',\'' + esc(mm.pageUrl) + '\')">' +
+      '<td><span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;color:' + conf.color + ';background:' + conf.bg + '">' + conf.label + '</span></td>' +
+      '<td><strong>' + esc(mm.page) + '</strong></td>' +
+      '<td>' + esc(mm.siteName) + '</td>' +
+      '<td>#' + (mm.posIdx + 1) + '</td>' +
+      '<td>' + esc(mm.expected) + '</td>' +
+      '<td style="color:var(--red);font-weight:600">' + esc(mm.found) + '</td>' +
+      '<td style="font-size:11px;color:var(--text-muted)">' + esc(mm.reason) + '</td>' +
+    '</tr>';
+  }).join('');
 }
 
 async function renderScanLogView(ct) {

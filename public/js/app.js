@@ -17,6 +17,7 @@ async function tryAutoLaunch() {
         if (data.gscTraffic) window.gscTraffic = data.gscTraffic;
         if (data.proposals) { proposals = data.proposals; console.log('[AUTO-LAUNCH] Proposals:', Object.keys(proposals).length); }
         if (data.sitesDB) sitesDB = data.sitesDB;
+        if (data.marketsDB) window.marketsDB = data.marketsDB;
         processData();
         autoDetectSiteConfigs();
         document.getElementById('login-screen').style.display = 'none';

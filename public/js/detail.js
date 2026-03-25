@@ -28,7 +28,7 @@ function renderPageDetail(ct, pageUrl) {
       </div>\
     </div>\
     <div class="stats-banner">\
-      <div class="stat-item"><div class="stat-val cyan">' + fmt(pg.traffic) + '</div><div class="stat-lbl">Traffic</div></div>\
+      <div class="stat-item"><div class="stat-val cyan">' + fmt(pg.traffic) + (typeof trendBadge === 'function' ? trendBadge(pg.traffic, pg.trafficPrevious) : '') + '</div><div class="stat-lbl">Traffic (30d)</div></div>\
       <div class="stat-sep"></div>\
       <div class="stat-item"><div class="stat-val">' + (conv || 0) + '%</div><div class="stat-lbl">Conversion</div></div>\
       <div class="stat-sep"></div>\
@@ -38,6 +38,23 @@ function renderPageDetail(ct, pageUrl) {
       <div class="stat-sep"></div>\
       <div class="stat-item"><div class="stat-val cyan" id="page-eftd-value">' + fmt(eftd) + '</div><div class="stat-lbl">Est. eFTD</div></div>\
     </div>\
+    ' + (function() {
+      var m = pg.trafficMonthly || {};
+      var keys = Object.keys(m).sort(function(a, b) {
+        var pa = a.split('/'), pb = b.split('/');
+        return (parseInt(pb[1]) * 100 + parseInt(pb[0])) - (parseInt(pa[1]) * 100 + parseInt(pa[0]));
+      });
+      if (!keys.length) return '';
+      return '<div style="margin-bottom:14px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Monthly Traffic History</div>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+        keys.map(function(k, i) {
+          var prev = keys[i + 1] ? m[keys[i + 1]] : 0;
+          var trend = typeof trendBadge === 'function' ? trendBadge(m[k], prev) : '';
+          return '<div style="text-align:center;min-width:60px"><div style="font-size:14px;font-weight:700;color:var(--primary)">' + fmt(m[k]) + '</div><div style="font-size:11px;color:var(--text-muted)">' + k + trend + '</div></div>';
+        }).join('') +
+        '</div></div>';
+    })() + '\
     ' + (!isFullYear() ? '<div class="propagation-note">Changes made for ' + MONTH_LABELS[selectedMonth] + ' are automatically propagated to the following months</div>' : '') + '\
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">\
       <h3 style="font-size:15px;font-weight:600">Positions</h3>\
@@ -458,12 +475,14 @@ function showAddPageModal() {
     '<input type="text" id="add-article" placeholder="Article name">' +
     '<label>Site</label>' +
     '<select id="add-site"><option value="">Select...</option>' + sites.map(function(s) { return '<option>' + esc(s) + '</option>'; }).join('') + '<option value="__new">+ New site</option></select>' +
-    '<label>Topic</label>' +
-    '<select id="add-topic"><option value="">None</option>' + topics.map(function(t) { return '<option>' + esc(t) + '</option>'; }).join('') + '<option value="__new">+ New topic</option></select>' +
+    '<label>Topics</label>' +
+    '<div id="add-topic-picker" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);min-height:36px">' +
+      topics.map(function(t) { return '<label style="display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:var(--bg-main);border:1px solid var(--border);white-space:nowrap"><input type="checkbox" class="add-topic-chk" value="' + esc(t) + '" style="width:13px;height:13px;margin:0">' + esc(t) + '</label>'; }).join('') +
+      '<button type="button" onclick="addNewTopicToPickerRankings()" style="padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:none;border:1px dashed var(--border);color:var(--primary)">+ New</button>' +
+    '</div>' +
     '<label>Number of positions</label>' +
     '<input type="number" id="add-nbpos" value="10" min="1" max="30">' +
-    '<label>Traffic (estimate)</label>' +
-    '<input type="number" id="add-traffic" value="0" min="0">' +
+    '<div style="margin-top:12px;display:flex;align-items:baseline;gap:8px"><input type="checkbox" id="add-to-rankings" checked style="width:16px;height:16px;margin:0;cursor:pointer;position:relative;top:2px"><label for="add-to-rankings" style="font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">Add to rankings</label><span style="font-size:11px;color:var(--text-muted)">— if unchecked, only added to site database</span></div>' +
     '<div class="modal-actions">' +
       '<button class="btn-cancel" onclick="this.closest(\'.modal-overlay\').remove()">Cancel</button>' +
       '<button class="btn-primary" onclick="addPage()">Add</button>' +
@@ -472,17 +491,31 @@ function showAddPageModal() {
   document.body.appendChild(overlay);
 }
 
+function addNewTopicToPickerRankings() {
+  var v = prompt('New topic name:');
+  if (!v || !v.trim()) return;
+  v = v.trim();
+  var picker = document.getElementById('add-topic-picker');
+  var btn = picker.querySelector('button');
+  var lbl = document.createElement('label');
+  lbl.style.cssText = 'display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:12px;cursor:pointer;background:var(--bg-main);border:1px solid var(--border);white-space:nowrap';
+  lbl.innerHTML = '<input type="checkbox" class="add-topic-chk" value="' + v.replace(/"/g, '&quot;') + '" checked style="width:13px;height:13px;margin:0">' + v.replace(/</g, '&lt;');
+  picker.insertBefore(lbl, btn);
+}
+
 function addPage() {
   var url = document.getElementById('add-url').value.trim();
   var article = document.getElementById('add-article').value.trim();
   var site = document.getElementById('add-site').value;
-  var topic = document.getElementById('add-topic').value;
+  var topicChks = document.querySelectorAll('.add-topic-chk:checked');
+  var topicArr = []; topicChks.forEach(function(c) { topicArr.push(c.value); });
+  var topic = topicArr.join(', ');
   var nbPos = parseInt(document.getElementById('add-nbpos').value) || 10;
-  var traffic = parseInt(document.getElementById('add-traffic').value) || 0;
+  var traffic = 0;
+  var addToRankings = document.getElementById('add-to-rankings').checked;
 
   if (!url || !article) { showToast('URL and name required', 'warning'); return; }
   if (site === '__new') { site = prompt('New site name:'); if (!site) return; }
-  if (topic === '__new') { topic = prompt('New topic name:'); if (!topic) return; }
 
   // Check if URL already exists
   if (getMarketPages().find(function(p) { return p.url === url; })) { showToast('This URL already exists', 'warning'); return; }
@@ -491,7 +524,8 @@ function addPage() {
   var pg = {
     article: article, siteName: site, url: url, positions: [],
     nbPos: nbPos, topic: topic || '', tags: '', area: '',
-    traffic: traffic, trafficFeb: traffic, trafficSep: 0, trafficJuly: 0, fees: {}
+    traffic: traffic, trafficFeb: traffic, trafficSep: 0, trafficJuly: 0, fees: {},
+    inRankings: addToRankings
   };
   for (var i = 1; i <= nbPos; i++) {
     pg.positions.push(String(i));
@@ -502,18 +536,37 @@ function addPage() {
     allMarkets[currentMarket].sites.sort();
   }
 
-  // Add to positionData
-  if (!positionData[currentMarket]) positionData[currentMarket] = {};
-  positionData[currentMarket][url] = { positions: [], conversion: 0 };
-  pg.positions.forEach(function(posName) {
-    var pos = { name: posName, months: {} };
-    MONTHS_2026.forEach(function(m) { pos.months[m] = { operator: '', sold: false, price: 0 }; });
-    positionData[currentMarket][url].positions.push(pos);
-  });
+  if (addToRankings) {
+    // Add to positionData (visible in rankings)
+    if (!positionData[currentMarket]) positionData[currentMarket] = {};
+    positionData[currentMarket][url] = { positions: [], conversion: 0 };
+    pg.positions.forEach(function(posName) {
+      var pos = { name: posName, months: {} };
+      MONTHS_2026.forEach(function(m) { pos.months[m] = { operator: '', sold: false, price: 0 }; });
+      positionData[currentMarket][url].positions.push(pos);
+    });
+  }
+
+  // Add to sitesDB (always)
+  if (site) {
+    if (!sitesDB[site]) sitesDB[site] = { name: site, domain: '', contact: '', notes: '', pages: [] };
+    if (!sitesDB[site].pages) sitesDB[site].pages = [];
+    var dup = sitesDB[site].pages.some(function(p) { return p.url === url && p.market === currentMarket; });
+    if (!dup) {
+      sitesDB[site].pages.push({ url: url, article: article, market: currentMarket, type: 'generic', topic: topic || '', traffic: traffic });
+    }
+  }
 
   savePos();
+  // Auto-add to traffic Google Sheet
+  addUrlToTrafficSheet(url, currentMarket);
   document.querySelector('.modal-overlay')?.remove();
-  showView('page-detail', url);
+  if (addToRankings) {
+    showView('page-detail', url);
+  } else {
+    showToast('Page added to site database', 'success');
+    showView('dashboard');
+  }
 }
 
 // ==================== SITE SETTINGS MODAL ====================

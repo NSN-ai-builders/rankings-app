@@ -268,18 +268,64 @@ for (const row of pages) {
 
 // ── Build marketsDB ──────────────────────────────────────────────────────────
 console.log('Building marketsDB...');
+
+// ISO 2 corrections (CSV has non-standard codes)
+// Note: CR is valid for Costa Rica, only fix it for Czech Republic
+const ISO_FIXES_BY_MARKET = {
+  'Czech Republic': { from: 'CR', to: 'CZ' },
+  'Bulgaria':       { from: 'BU', to: 'BG' },
+  'Japan':          { from: 'JA', to: 'JP' },
+  'Ireland':        { from: 'IR', to: 'IE' },
+  'United Kingdom': { from: 'UK', to: 'GB' },
+};
+
+// Multi-country / aggregate markets → "all" (no country filter for traffic)
+const MULTI_COUNTRY_MARKETS = new Set([
+  'Africa FR', 'Africa EN', 'Rest of LATAM', 'Other', 'Global'
+]);
+
 const marketsDB = {};
+const seenMarkets = {};
+
 for (const row of markets) {
   const name = (col(row, 'Market') || '').trim();
   if (!name) continue;
 
+  const area = cleanRef(col(row, 'Area'));
+  const bu = cleanRef(col(row, 'Business Unit'));
+  let code = (col(row, 'MKT') || '').trim();
+
+  // Fix non-standard ISO codes (per market to avoid Costa Rica CR → CZ)
+  const fix = ISO_FIXES_BY_MARKET[name];
+  if (fix && code === fix.from) code = fix.to;
+
+  // Determine countryCodes for traffic filtering
+  let countryCodes;
+  if (MULTI_COUNTRY_MARKETS.has(name) || code === '-' || !code) {
+    countryCodes = ['all'];
+  } else {
+    countryCodes = [code];
+  }
+
+  // Handle Bojoko duplicates — flag on primary entry, skip duplicate
+  if (area === 'Bojoko') {
+    if (seenMarkets[name]) {
+      marketsDB[seenMarkets[name]].bojoko = true;
+      continue;
+    }
+  }
+
   const sitesStr = col(row, 'Sites') || '';
   const sitesList = sitesStr.split(',').map(s => cleanRef(s.trim())).filter(Boolean);
 
+  seenMarkets[name] = name;
+
   marketsDB[name] = {
-    code: col(row, 'MKT') || '',
-    area: cleanRef(col(row, 'Area')),
-    bu: cleanRef(col(row, 'Business Unit')),
+    code: code,
+    countryCodes: countryCodes,
+    area: area,
+    bu: bu,
+    bojoko: area === 'Bojoko',
     activePlayers: parseNum(col(row, 'Active players')),
     marketSize: parseNum(col(row, 'Market size')),
     regulationStatus: col(row, 'Regulation status') || '',

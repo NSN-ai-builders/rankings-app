@@ -106,9 +106,30 @@ app.post('/api/data', requireAuth, (req, res) => {
       }
     } catch(e) { /* ignore */ }
 
+    // Merge positionData: preserve server-side fields (lastScanned, conversion, noRanking, autoScan)
+    // that the scan may have updated while the frontend had stale data
+    const mergedPositionData = positionData || {};
+    const existingPD = existing.positionData || {};
+    for (const market of Object.keys(existingPD)) {
+      if (!mergedPositionData[market]) continue;
+      for (const url of Object.keys(existingPD[market])) {
+        const ex = existingPD[market][url];
+        const fe = mergedPositionData[market][url];
+        if (!fe || !ex) continue;
+        // Preserve server-side scan fields if frontend didn't update them
+        if (ex.lastScanned && !fe.lastScanned) fe.lastScanned = ex.lastScanned;
+        if (ex.noRanking !== undefined && fe.noRanking === undefined) fe.noRanking = ex.noRanking;
+        if (ex.autoScan !== undefined && fe.autoScan === undefined) fe.autoScan = ex.autoScan;
+        // Preserve conversion: keep the higher/non-zero value (frontend may have reset to 0 via processData)
+        if (ex.conversion && (!fe.conversion || fe.conversion === 0)) fe.conversion = ex.conversion;
+        // Preserve lastScanResults if frontend doesn't have them
+        if (ex.lastScanResults && !fe.lastScanResults) fe.lastScanResults = ex.lastScanResults;
+      }
+    }
+
     const data = {
       operators: operators || {},
-      positionData: positionData || {},
+      positionData: mergedPositionData,
       scrapeAlerts: scrapeAlerts || {},
       lastModified: new Date().toISOString()
     };
@@ -141,6 +162,8 @@ app.post('/api/data', requireAuth, (req, res) => {
     if (existing.gscTraffic) data.gscTraffic = existing.gscTraffic;
     if (existing.gscLastSync) data.gscLastSync = existing.gscLastSync;
     if (existing.scanLog) data.scanLog = existing.scanLog;
+    if (existing.marketsDB) data.marketsDB = existing.marketsDB;
+    if (existing.allMarkets) data.allMarkets = existing.allMarkets;
 
     const json = JSON.stringify(data);
     console.log(`[POST /api/data] Writing ${json.length} bytes to ${DATA_FILE}`);
@@ -149,6 +172,21 @@ app.post('/api/data', requireAuth, (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('[POST /api/data] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== MARKETS DB API ====================
+app.post('/api/markets-db', requireAuth, (req, res) => {
+  try {
+    const { marketsDB } = req.body;
+    if (!marketsDB) return res.status(400).json({ error: 'Missing marketsDB' });
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    data.marketsDB = marketsDB;
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data), 'utf8');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[POST /api/markets-db] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -974,7 +1012,13 @@ async function runGSCSync() {
             clicks = clickMap[altUrl] || clickMap[altUrl + '/'] || clickMap[altUrl.replace(/\/$/, '')] || 0;
           }
           if (clicks > 0) {
-            data.gscTraffic[market][pageUrl] = { clicks, lastUpdated: end };
+            const existing = data.gscTraffic[market][pageUrl] || {};
+            data.gscTraffic[market][pageUrl] = {
+              current: clicks,
+              previous: existing.current || 0,
+              monthly: existing.monthly || {},
+              lastUpdated: end
+            };
             updatedCount++;
           }
         });
@@ -986,8 +1030,11 @@ async function runGSCSync() {
     }
   }
 
-  data.gscLastSync = new Date().toISOString();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data), 'utf8');
+  // Re-read data.json to avoid overwriting changes made during sync
+  const freshData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  freshData.gscTraffic = data.gscTraffic;
+  freshData.gscLastSync = new Date().toISOString();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(freshData), 'utf8');
   console.log(`[GSC] Sync complete: ${matchedSites} sites matched, ${updatedCount} pages updated`);
   return { matchedSites, updatedPages: updatedCount, period: { start, end } };
 }
@@ -1313,12 +1360,58 @@ async function runAutoScan(manualType, filterMarket) {
   };
 
   scanLog.push(logEntry);
-  data.positionData = positionData;
-  data.scrapeAlerts = scrapeAlerts;
-  data.scanLog = scanLog.slice(-200);
 
+  // Re-read data.json to avoid overwriting changes made by frontend during scan
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data), 'utf8');
+    const freshData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+
+    // Merge scan results into fresh positionData (only update fields the scan touches)
+    const freshPD = freshData.positionData || {};
+    for (const market of Object.keys(positionData)) {
+      if (!freshPD[market]) freshPD[market] = {};
+      for (const url of Object.keys(positionData[market])) {
+        const scanned = positionData[market][url];
+        if (!freshPD[market][url]) {
+          freshPD[market][url] = scanned;
+        } else {
+          // Merge: preserve user-edited fields (prices, sold status) from fresh data
+          // but apply scan fields (lastScanned, positions structure, lastScanResults, noRanking)
+          const fresh = freshPD[market][url];
+          if (scanned.lastScanned) fresh.lastScanned = scanned.lastScanned;
+          if (scanned.lastScanResults) fresh.lastScanResults = scanned.lastScanResults;
+          if (scanned.noRanking !== undefined) fresh.noRanking = scanned.noRanking;
+          // Merge position months: scan updates operator assignments on free positions
+          // but we must NOT overwrite user-changed sold/price data
+          if (scanned.positions && fresh.positions) {
+            for (let i = 0; i < scanned.positions.length && i < fresh.positions.length; i++) {
+              const scanPos = scanned.positions[i];
+              const freshPos = fresh.positions[i];
+              if (!scanPos.months || !freshPos.months) continue;
+              for (const m of Object.keys(scanPos.months)) {
+                const scanMd = scanPos.months[m];
+                const freshMd = freshPos.months[m];
+                if (!freshMd) { freshPos.months[m] = scanMd; continue; }
+                // Only update operator on free positions (don't overwrite user sales)
+                if (!freshMd.sold && scanMd.operator) {
+                  freshMd.operator = scanMd.operator;
+                }
+              }
+            }
+            // If scan added/reordered positions, update the structure
+            if (scanned.positions.length !== fresh.positions.length) {
+              fresh.positions = scanned.positions;
+            }
+          }
+        }
+      }
+    }
+
+    // Merge scrapeAlerts
+    freshData.scrapeAlerts = scrapeAlerts;
+    freshData.positionData = freshPD;
+    freshData.scanLog = scanLog.slice(-200);
+
+    fs.writeFileSync(DATA_FILE, JSON.stringify(freshData), 'utf8');
     console.log(`[SCAN] Auto-scan complete: ${totalScanned} scanned, ${totalSkipped} skipped, ${totalAlerts} alerts, ${totalErrors} errors`);
   } catch(e) {
     console.error('[SCAN] Failed to save results:', e.message);
@@ -1352,6 +1445,208 @@ app.post('/api/scan-all', requireAuth, async (req, res) => {
   res.json({ success: true, message: market ? 'Scan started for ' + market : 'Scan started' });
   // Run async so response returns immediately
   runAutoScan('manual', market || null).catch(e => console.error('[SCAN] Manual scan failed:', e.message));
+});
+
+// ==================== GOOGLE SHEETS (Traffic) ====================
+const TRAFFIC_SHEET_ID = process.env.TRAFFIC_SHEET_ID || '';
+let sheetsAuth = null;
+let sheetsClient = null;
+
+function initSheets() {
+  try {
+    if (!google || !fs.existsSync(GSC_CREDS_PATH) || !TRAFFIC_SHEET_ID) return;
+    const creds = JSON.parse(fs.readFileSync(GSC_CREDS_PATH, 'utf8'));
+    sheetsAuth = new google.auth.GoogleAuth({
+      credentials: creds,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    sheetsClient = google.sheets({ version: 'v4', auth: sheetsAuth });
+    console.log('[SHEETS] Initialized for sheet:', TRAFFIC_SHEET_ID);
+  } catch(e) {
+    console.error('[SHEETS] Failed to initialize:', e.message);
+  }
+}
+
+// Sync all URLs to the "URLs" sheet tab
+app.post('/api/sync-traffic-sheet', requireAuth, async (req, res) => {
+  try {
+    if (!sheetsClient) return res.status(500).json({ error: 'Google Sheets not configured' });
+
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const pd = data.positionData || {};
+    const mdb = data.marketsDB || {};
+
+    // Build rows: [URL, Country Code, Market] — Traffic tab expects additional columns filled by BigQuery
+    const rows = [['URL', 'Country Code', 'Market']];
+
+    for (const market of Object.keys(pd)) {
+      const mk = mdb[market] || {};
+      const countryCodes = mk.countryCodes || ['all'];
+
+      for (const url of Object.keys(pd[market])) {
+        for (const cc of countryCodes) {
+          rows.push([url, cc, market]);
+        }
+      }
+    }
+
+    // Ensure "URLs" sheet exists
+    const spreadsheet = await sheetsClient.spreadsheets.get({ spreadsheetId: TRAFFIC_SHEET_ID });
+    const sheets = spreadsheet.data.sheets.map(s => s.properties.title);
+    if (!sheets.includes('URLs')) {
+      await sheetsClient.spreadsheets.batchUpdate({
+        spreadsheetId: TRAFFIC_SHEET_ID,
+        requestBody: { requests: [{ addSheet: { properties: { title: 'URLs' } } }] }
+      });
+    }
+
+    // Clear and write
+    await sheetsClient.spreadsheets.values.clear({
+      spreadsheetId: TRAFFIC_SHEET_ID,
+      range: 'URLs!A:C'
+    });
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId: TRAFFIC_SHEET_ID,
+      range: 'URLs!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values: rows }
+    });
+
+    console.log(`[SHEETS] Synced ${rows.length - 1} URL rows to sheet`);
+    res.json({ success: true, rows: rows.length - 1 });
+  } catch(err) {
+    console.error('[SHEETS] Sync error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import traffic data from the "Traffic" sheet tab
+// Expected columns: URL | Country Code | Market | Traffic 30d | Traffic Previous 30d | [monthly columns: 01/26, 02/26, ...]
+app.post('/api/import-traffic', requireAuth, async (req, res) => {
+  try {
+    if (!sheetsClient) return res.status(500).json({ error: 'Google Sheets not configured' });
+
+    const result = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId: TRAFFIC_SHEET_ID,
+      range: 'Traffic!A1:Z'
+    });
+
+    const rows = result.data.values || [];
+    if (rows.length < 2) return res.json({ success: true, imported: 0, message: 'No data in Traffic tab' });
+
+    // Parse header to find monthly columns (format: MM/YY)
+    const header = rows[0];
+    const monthlyColIndices = []; // { index, month }
+    const monthRegex = /^(\d{2}\/\d{2})$/;
+    for (let c = 5; c < header.length; c++) {
+      const val = (header[c] || '').trim();
+      if (monthRegex.test(val)) {
+        monthlyColIndices.push({ index: c, month: val });
+      }
+    }
+
+    // Aggregate per URL: sum across country codes
+    const trafficMap = {}; // url -> { current, previous, monthly: { "03/26": N, ... } }
+
+    for (let i = 1; i < rows.length; i++) {
+      const url = (rows[i][0] || '').trim();
+      if (!url) continue;
+      const current = parseFloat(rows[i][3]) || 0;
+      const previous = parseFloat(rows[i][4]) || 0;
+
+      if (!trafficMap[url]) trafficMap[url] = { current: 0, previous: 0, monthly: {} };
+      trafficMap[url].current += current;
+      trafficMap[url].previous += previous;
+
+      // Parse monthly columns
+      monthlyColIndices.forEach(({ index, month }) => {
+        const val = parseFloat(rows[i][index]) || 0;
+        if (!trafficMap[url].monthly[month]) trafficMap[url].monthly[month] = 0;
+        trafficMap[url].monthly[month] += val;
+      });
+    }
+
+    // Update data
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    if (!data.gscTraffic) data.gscTraffic = {};
+    const pd = data.positionData || {};
+    let updated = 0;
+
+    for (const market of Object.keys(pd)) {
+      if (!data.gscTraffic[market]) data.gscTraffic[market] = {};
+      for (const url of Object.keys(pd[market])) {
+        const match = trafficMap[url] || trafficMap[url + '/'] || trafficMap[url.replace(/\/$/, '')];
+        if (match) {
+          // Merge monthly: preserve old months, add/overwrite new ones
+          const existing = data.gscTraffic[market][url] || {};
+          const existingMonthly = existing.monthly || {};
+          const mergedMonthly = Object.assign({}, existingMonthly, match.monthly);
+
+          data.gscTraffic[market][url] = {
+            current: match.current,
+            previous: match.previous,
+            monthly: mergedMonthly,
+            lastUpdated: new Date().toISOString()
+          };
+
+          // Also set pg.traffic = current (for backward compat)
+          pd[market][url].traffic = match.current;
+          updated++;
+        }
+      }
+    }
+
+    // Re-read to avoid overwriting concurrent changes, only merge traffic fields
+    const freshData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    freshData.gscTraffic = data.gscTraffic;
+    freshData.trafficLastSync = new Date().toISOString();
+    // Update only .traffic field on each URL in positionData
+    const freshPD = freshData.positionData || {};
+    for (const market of Object.keys(pd)) {
+      if (!freshPD[market]) continue;
+      for (const url of Object.keys(pd[market])) {
+        if (freshPD[market][url] && pd[market][url].traffic) {
+          freshPD[market][url].traffic = pd[market][url].traffic;
+        }
+      }
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(freshData), 'utf8');
+
+    console.log(`[SHEETS] Imported traffic for ${updated} pages (${monthlyColIndices.length} monthly cols) from ${rows.length - 1} rows`);
+    res.json({ success: true, imported: updated, totalRows: rows.length - 1, monthlyCols: monthlyColIndices.map(m => m.month) });
+  } catch(err) {
+    console.error('[SHEETS] Import traffic error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add single URL to traffic sheet (called when a new page is created)
+app.post('/api/add-traffic-url', requireAuth, async (req, res) => {
+  try {
+    if (!sheetsClient) return res.status(500).json({ error: 'Google Sheets not configured' });
+    const { url, market } = req.body;
+    if (!url || !market) return res.status(400).json({ error: 'Missing url or market' });
+
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const mdb = data.marketsDB || {};
+    const mk = mdb[market] || {};
+    const countryCodes = mk.countryCodes || ['all'];
+
+    const rows = countryCodes.map(cc => [url, cc, market]);
+
+    await sheetsClient.spreadsheets.values.append({
+      spreadsheetId: TRAFFIC_SHEET_ID,
+      range: 'URLs!A:C',
+      valueInputOption: 'RAW',
+      requestBody: { values: rows }
+    });
+
+    console.log(`[SHEETS] Added ${rows.length} row(s) for new page: ${url}`);
+    res.json({ success: true, rows: rows.length });
+  } catch(err) {
+    console.error('[SHEETS] Add URL error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==================== ASANA API ====================
@@ -1488,6 +1783,8 @@ app.listen(PORT, () => {
   // Init GSC + daily sync
   initGSC();
   scheduleGSCSync();
+  // Init Google Sheets for traffic
+  initSheets();
   // Load scan config and start scheduler
   loadScanConfig();
   scheduleNextScan();

@@ -184,6 +184,7 @@ async function loadPersisted() {
       if (data.gscTraffic) window.gscTraffic = data.gscTraffic;
       if (data.proposals) { proposals = data.proposals; console.log('[LOAD] Proposals:', Object.keys(proposals).length); }
       if (data.sitesDB) sitesDB = data.sitesDB;
+      if (data.marketsDB) window.marketsDB = data.marketsDB;
       // Restore CSV data and rebuild allMarkets
       if (data.rawPagesCSV && data.rawPositionsCSV) {
         rawPagesCSV = data.rawPagesCSV;
@@ -195,7 +196,7 @@ async function loadPersisted() {
   } catch(e) { console.error('[LOAD] Failed:', e); }
 }
 
-// Apply GSC traffic to pages (clics = traffic)
+// Apply GSC traffic to pages — supports new format { current, previous, monthly }
 function applyGSCTraffic() {
   if (!window.gscTraffic || !currentMarket) return;
   var gscMarket = window.gscTraffic[currentMarket] || {};
@@ -203,12 +204,36 @@ function applyGSCTraffic() {
   var updated = 0;
   pages.forEach(function(pg) {
     var gsc = gscMarket[pg.url] || gscMarket[pg.url + '/'] || gscMarket[pg.url.replace(/\/$/, '')];
-    if (gsc && gsc.clicks > 0) {
+    if (!gsc) return;
+    // New format: { current, previous, monthly }
+    if (gsc.current !== undefined) {
+      pg.traffic = gsc.current;
+      pg.trafficPrevious = gsc.previous || 0;
+      pg.trafficMonthly = gsc.monthly || {};
+      updated++;
+    } else if (gsc.clicks > 0) {
+      // Legacy format
       pg.traffic = gsc.clicks;
       updated++;
     }
   });
   if (updated > 0) console.log('[GSC] Applied traffic to', updated, 'pages');
+}
+
+// Helper: compute trend % between current and previous
+function trafficTrend(current, previous) {
+  if (!previous || previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+// Helper: render trend badge HTML
+function trendBadge(current, previous) {
+  if (!previous && !current) return '';
+  var pct = trafficTrend(current, previous);
+  if (pct === 0) return '<span style="color:#888;font-size:11px;margin-left:4px">→ 0%</span>';
+  var color = pct > 0 ? '#00802b' : '#cc0000';
+  var arrow = pct > 0 ? '↑' : '↓';
+  return '<span style="color:' + color + ';font-size:11px;font-weight:600;margin-left:4px">' + arrow + ' ' + Math.abs(pct) + '%</span>';
 }
 
 var _saveTimeout = null;
@@ -231,6 +256,67 @@ function saveAll() {
 function saveOps() { saveAll(); }
 function savePos() { saveAll(); }
 function saveAlerts() { saveAll(); }
+
+// ==================== TRAFFIC SHEET SYNC ====================
+function syncTrafficSheet() {
+  var btn = document.getElementById('btn-sync-traffic');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+  fetch('/api/sync-traffic-sheet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin'
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync URLs'; }
+    if (d.success) {
+      alert('URLs synced to Google Sheet: ' + d.rows + ' rows');
+    } else {
+      alert('Sync error: ' + (d.error || 'Unknown error'));
+    }
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sync URLs'; }
+    alert('Sync error: ' + e.message);
+  });
+}
+
+function importTrafficSheet() {
+  var btn = document.getElementById('btn-import-traffic');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
+  fetch('/api/import-traffic', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin'
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Import Traffic'; }
+    if (d.success) {
+      alert('Traffic imported: ' + d.imported + ' pages updated (from ' + d.totalRows + ' rows)');
+      // Reload data to reflect traffic changes
+      loadData().then(function() { if (typeof renderMarketsView === 'function') renderMarketsView(); });
+    } else {
+      alert('Import error: ' + (d.error || 'Unknown error'));
+    }
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Import Traffic'; }
+    alert('Import error: ' + e.message);
+  });
+}
+
+// ==================== AUTO-ADD URL TO TRAFFIC SHEET ====================
+function addUrlToTrafficSheet(url, market) {
+  fetch('/api/add-traffic-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ url: url, market: market })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.success) {
+      console.log('[TRAFFIC] Added URL to sheet:', url, '(' + d.rows + ' rows)');
+    } else {
+      console.warn('[TRAFFIC] Failed to add URL:', d.error);
+    }
+  }).catch(function(e) {
+    console.warn('[TRAFFIC] Failed to add URL:', e.message);
+  });
+}
 
 // ==================== SITE CONFIG AUTO-DETECT ====================
 function autoDetectSiteConfigs() {
