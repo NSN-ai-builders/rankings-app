@@ -28,7 +28,7 @@ jobs:
       - name: Deploy to lab-nsn VPS
         uses: appleboy/ssh-action@v1
         with:
-          host: 46.225.135.201
+          host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |

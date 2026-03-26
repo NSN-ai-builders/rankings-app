@@ -29,9 +29,15 @@ function initGSC() {
   }
 }
 
+const crypto = require('crypto');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const PASSWORD = process.env.APP_PASSWORD || 'rankings2026';
+if (!process.env.APP_PASSWORD) {
+  console.error('FATAL: APP_PASSWORD environment variable is not set.');
+  process.exit(1);
+}
+const PASSWORD = process.env.APP_PASSWORD;
 const AUTH_TOKEN = Buffer.from(PASSWORD).toString('base64');
 // Auto-detect Railway volume at /data, fallback to local dir
 let DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -41,7 +47,7 @@ if (fs.existsSync('/data') && fs.statSync('/data').isDirectory()) {
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 
 app.use(cookieParser());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // ==================== AUTH ====================
 
@@ -50,9 +56,19 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
-app.post('/api/login', (req, res) => {
+const rateLimit = require('express-rate-limit');
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/login', loginLimiter, (req, res) => {
   const { password } = req.body;
-  if (password === PASSWORD) {
+  const a = Buffer.from(String(password || ''));
+  const b = Buffer.from(PASSWORD);
+  if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
     res.cookie('auth_token', AUTH_TOKEN, {
       httpOnly: true,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -844,9 +860,29 @@ async function fetchPageWithBrowser(url) {
   }
 }
 
+function isBlockedUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return true;
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === 'localhost' || hostname === '[::1]') return true;
+    const parts = hostname.split('.').map(Number);
+    if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      if (parts[0] === 127) return true;
+      if (parts[0] === 10) return true;
+      if (parts[0] === 192 && parts[1] === 168) return true;
+      if (parts[0] === 169 && parts[1] === 254) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 app.get('/api/scrape', requireAuth, async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: 'Missing url parameter' });
+  if (isBlockedUrl(url)) return res.status(400).json({ error: 'Blocked URL' });
 
   try {
     // Try basic HTTP first (faster)
