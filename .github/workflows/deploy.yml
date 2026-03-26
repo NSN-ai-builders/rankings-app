@@ -13,9 +13,14 @@ jobs:
       - name: Claude Code security & simplification review
         run: |
           npm install -g @anthropic-ai/claude-code --silent
-          claude --print \
+          REVIEW=$(claude --print \
             "Review this codebase for: 1) security issues (injections, exposed secrets, auth flaws) 2) simplification opportunities. Be concise, list findings as bullet points. If critical security issue found, start your response with CRITICAL:" \
-            --permission-mode bypassPermissions || true
+            --permission-mode bypassPermissions)
+          echo "$REVIEW"
+          if echo "$REVIEW" | grep -q "^CRITICAL"; then
+            echo "::error::Critical security issue detected — deploy blocked. Fix before merging."
+            exit 1
+          fi
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -24,7 +29,6 @@ jobs:
     needs: review
     steps:
       - uses: actions/checkout@v4
-
       - name: Deploy to lab-nsn VPS
         uses: appleboy/ssh-action@v1
         with:
