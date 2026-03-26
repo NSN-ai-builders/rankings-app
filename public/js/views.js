@@ -2395,6 +2395,13 @@ async function renderScanLogView(ct) {
   '<div id="gsc-status-info" style="margin-bottom:16px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:3px;font-size:13px">Loading GSC status...</div>' +
   '<div id="scan-log-content">Loading...</div>';
 
+  // Check if scan is currently running
+  try {
+    var progResp = await fetch('/api/scan-progress', { credentials: 'same-origin' });
+    var prog = await progResp.json();
+    if (prog.running) pollScanProgress();
+  } catch(e) {}
+
   // Load config
   try {
     var resp = await fetch('/api/scan-config');
@@ -2525,16 +2532,61 @@ async function triggerGSCSync() {
 
 async function triggerScanAll() {
   var btn = document.getElementById('scan-all-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Scanning...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Starting scan...'; }
   try {
-    await fetch('/api/scan-all', { method: 'POST' });
-    showToast('Scan started in background. Refresh the page in a few minutes to see results.', 'success', 6000);
+    var resp = await fetch('/api/scan-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
+    var result = await resp.json();
+    if (result.success === false) {
+      showToast(result.message || 'Scan already in progress', 'warning');
+      pollScanProgress();
+      return;
+    }
+    showToast('Scan started', 'success');
+    pollScanProgress();
   } catch(e) {
     showToast('Failed to start scan: ' + e.message, 'error');
-  }
-  setTimeout(function() {
     if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDD0D Scan all pages now'; }
-  }, 10000);
+  }
+}
+
+var _scanPollTimer = null;
+function pollScanProgress() {
+  if (_scanPollTimer) clearInterval(_scanPollTimer);
+  var btn = document.getElementById('scan-all-btn');
+  _scanPollTimer = setInterval(async function() {
+    try {
+      var resp = await fetch('/api/scan-progress', { credentials: 'same-origin' });
+      var p = await resp.json();
+      btn = document.getElementById('scan-all-btn');
+      if (p.running) {
+        var pct = p.total > 0 ? Math.round((p.scanned / p.total) * 100) : 0;
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '\u23F3 Scanning... ' + p.scanned + '/' + p.total + ' (' + pct + '%)';
+        }
+      } else {
+        clearInterval(_scanPollTimer);
+        _scanPollTimer = null;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '\uD83D\uDD0D Scan all pages now';
+        }
+        if (p.scanned > 0) {
+          showToast('Scan complete: ' + p.scanned + ' pages scanned, ' + p.alerts + ' alerts, ' + p.errors + ' errors', 'success', 8000);
+        }
+      }
+    } catch(e) {
+      clearInterval(_scanPollTimer);
+      _scanPollTimer = null;
+      if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDD0D Scan all pages now'; }
+    }
+  }, 5000);
+
+  // Also check immediately
+  setTimeout(function() {
+    var btn2 = document.getElementById('scan-all-btn');
+    if (btn2) { btn2.disabled = true; btn2.textContent = '\u23F3 Scanning... 0/?'; }
+  }, 0);
 }
 
 function showScanConfig() {

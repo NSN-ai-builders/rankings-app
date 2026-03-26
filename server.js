@@ -1184,6 +1184,16 @@ async function runAutoScan(manualType, filterMarket) {
 
   const markets = filterMarket ? Object.keys(positionData).filter(m => m.toLowerCase() === filterMarket.toLowerCase()) : Object.keys(positionData);
   let totalScanned = 0, totalAlerts = 0, totalErrors = 0, totalSkipped = 0;
+
+  // Count total scannable pages for progress
+  let totalPages = 0;
+  for (const m of markets) {
+    const mp = positionData[m] || {};
+    for (const url of Object.keys(mp)) {
+      if (mp[url].autoScan !== false && !mp[url].noRanking) totalPages++;
+    }
+  }
+  scanProgress = { running: true, market: filterMarket || 'all', scanned: 0, total: totalPages, startedAt: now.toISOString(), errors: 0, alerts: 0 };
   const logEntry = {
     timestamp: now.toISOString(),
     type: manualType || 'auto',
@@ -1371,6 +1381,9 @@ async function runAutoScan(manualType, filterMarket) {
       }
 
       totalScanned++;
+      scanProgress.scanned = totalScanned;
+      scanProgress.errors = totalErrors;
+      scanProgress.alerts = totalAlerts;
       logEntry.results.push(pageResult);
     }
   }
@@ -1378,6 +1391,8 @@ async function runAutoScan(manualType, filterMarket) {
   } catch(loopErr) {
     console.error('[SCAN] Error during scan loop:', loopErr.message, loopErr.stack);
   }
+
+  scanProgress.running = false;
 
   logEntry.summary = {
     scanned: totalScanned,
@@ -1466,8 +1481,18 @@ app.get('/api/scan-log', requireAuth, (req, res) => {
   res.json({ log: scanLog.slice(-50).reverse() });
 });
 
+// Scan progress tracking
+let scanProgress = { running: false, market: null, scanned: 0, total: 0, startedAt: null, errors: 0, alerts: 0 };
+
+app.get('/api/scan-progress', requireAuth, (req, res) => {
+  res.json(scanProgress);
+});
+
 // Manual bulk scan trigger
 app.post('/api/scan-all', requireAuth, async (req, res) => {
+  if (scanProgress.running) {
+    return res.json({ success: false, message: 'Scan already in progress' });
+  }
   const { market } = req.body || {};
   res.json({ success: true, message: market ? 'Scan started for ' + market : 'Scan started' });
   // Run async so response returns immediately
